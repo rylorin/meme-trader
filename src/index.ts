@@ -8,7 +8,9 @@ export class MyTradingBotApp {
     this.api = new KuCoinApi(config);
   }
 
-  public start(): void {}
+  public start(): void {
+    this.api.start();
+  }
 }
 
 import config from "config";

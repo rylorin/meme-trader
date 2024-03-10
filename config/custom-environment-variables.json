@@ -1,1 +1,9 @@
-{}
+{
+  "kucoin-api": {
+    "apiAuth": {
+      "key": "KUCOINAPI_AUTH_KEY",
+      "secret": "KUCOINAPI_AUTH_SECRET",
+      "passphrase": "KUCOINAPI_AUTH_PASS"
+    }
+  }
+}

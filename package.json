@@ -21,6 +21,7 @@
     "config": "^3.3.11",
     "dotenv": "^16.3.1",
     "json-stringify-safe": "^5.0.1",
+    "kucoin-node-sdk": "^1.0.6",
     "rxjs": "^7.8.1",
     "uuid": "^9.0.0",
     "winston": "^3.11.0",

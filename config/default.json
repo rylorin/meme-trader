@@ -1,1 +1,11 @@
-{}
+{
+  "kucoin-api": {
+    "baseUrl": "https://openapi-v2.kucoin.com",
+    "apiAuth": {
+      "key": "",
+      "secret": "",
+      "passphrase": ""
+    },
+    "authVersion": 2
+  }
+}
