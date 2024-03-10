@@ -1,0 +1,31 @@
+name: Quality Check
+
+on:
+  push:
+    paths-ignore:
+      - "README.md"
+      - "LICENSE"
+      - ".github/workflows/build.yml"
+
+jobs:
+  qc:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18.16.1
+          cache: "yarn" # caches the yarn cache folder not node_modules
+
+      - name: Install packages
+        run: yarn install --frozen-lockfile
+
+      - name: Lint test
+        run: yarn lint
+
+      - name: Run tests
+        run: yarn test

@@ -1,2 +1,3 @@
 # meme-trader
-Meme stocks momentum trading bot for Kucoin exchange
+
+Meme stocks momentum trading bot at the KuCoin exchange.
