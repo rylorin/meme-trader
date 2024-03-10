@@ -1,6 +1,26 @@
 import { IConfig } from "config";
 import { LogLevel, gtpLogger } from "./logger";
 
+export type SymbolDesc = {
+  symbol: string;
+  name: string;
+  baseCurrency: string;
+  quoteCurrency: string;
+  feeCurrency: string;
+  market: string;
+  baseMinSize: number;
+  quoteMinSize: number;
+  baseMaxSize: number;
+  quoteMaxSize: number;
+  baseIncrement: number;
+  quoteIncrement: number;
+  priceIncrement: number;
+  priceLimitRate: number;
+  minFunds: number;
+  isMarginEnabled: boolean;
+  enableTrading: boolean;
+};
+
 export class KuCoinApi {
   protected config: IConfig;
   private readonly api: any;
@@ -20,8 +40,16 @@ export class KuCoinApi {
     });
   }
 
-  async start() {
+  public async start(): Promise<void> {
     const getTimestampRl = await this.api.rest.Others.getTimestamp();
     console.log(getTimestampRl.data);
+  }
+
+  public async getSymbolsList(market: string): Promise<SymbolDesc[]> {
+    const result = await this.api.rest.Market.Symbols.getSymbolsList({
+      market,
+    });
+    // console.log(result);
+    return result.data;
   }
 }
