@@ -26,10 +26,10 @@ export type LogLevel = (typeof LogLevel)[keyof typeof LogLevel];
 const level =
   (parseInt(process.env.LOG_LEVEL as string) as LogLevel) || LogLevel.Info; // Default to info
 const log_modules: string[] = ((process.env.LOG_MODULES as string) || "").split(
-  ","
+  ",",
 );
 const log_console: string[] = ((process.env.LOG_CONSOLE as string) || "").split(
-  ","
+  ",",
 );
 
 /**
@@ -64,7 +64,7 @@ export class Logger {
             format.timestamp(),
             format.printf(({ timestamp, level, message, service, asset }) => {
               return `${timestamp};${level};${service};${asset};${message}`;
-            })
+            }),
           ),
           maxsize: 2 * 1024 * 1024, // 2Mb
           maxFiles: 5,
@@ -78,7 +78,7 @@ export class Logger {
               const service_text = service ? ` [${service}]` : "";
               const asset_text = asset ? ` (${asset})` : "";
               return `[${timestamp}] ${level}${service_text}${asset_text} ${message}`;
-            })
+            }),
           ),
         }),
       ],
@@ -153,6 +153,7 @@ export class Logger {
     let assetString: string;
     if (asset == undefined) assetString = "";
     else if (typeof asset == "string") assetString = asset;
+    else assetString = typeof asset;
     const [s0, s1] = module.split(".");
     if (s1) {
       mainmodule = s0;
@@ -176,7 +177,7 @@ export class Logger {
         level: Logger.level2string(level),
         message,
         service: submodule,
-        asset: "assetString",
+        asset: assetString,
       });
     this.loggers["default"].log({
       level: Logger.level2string(level),
@@ -191,9 +192,8 @@ export class Logger {
    * Display an error notification (and log it)
    * @param title title of the notification
    * @param description content of the notification
-   * @param id an id for this notification to prevent duplicates
    */
-  public error(title: string, description: string, id: string) {
+  public error(title: string, description: string): void {
     this.log(LogLevel.Error, title, undefined, description);
   }
 
@@ -201,9 +201,8 @@ export class Logger {
    * Display a warning notification (and log it)
    * @param title title of the notification
    * @param description content of the notification
-   * @param id an id for this notification to prevent duplicates
    */
-  public warn(title: string, description: string, id: string) {
+  public warn(title: string, description: string): void {
     this.log(LogLevel.Warning, title, undefined, description);
   }
 
@@ -211,12 +210,11 @@ export class Logger {
    * Display an info notification (and log it)
    * @param title title of the notification
    * @param description content of the notification
-   * @param id an id for this notification to prevent duplicates
    */
-  public info(title: string, description: string, id: string) {
+  public info(title: string, description: string): void {
     this.log(LogLevel.Info, title, undefined, description);
   }
 }
 
 /** singleton instance of Logger */
-export const gtpLogger = new Logger();
+export const gLogger = new Logger();

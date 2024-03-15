@@ -275,6 +275,11 @@
   resolved "https://registry.yarnpkg.com/@pkgr/core/-/core-0.1.1.tgz#1ec17e2edbec25c8306d424ecfbf13c7de1aaa31"
   integrity sha512-cq8o4cWH0ibXh9VGi5P20Tu9XF/0fFXl9EUinr9QfTM7a7p0oTA4iJRCQWppXR1Pg8dSM0UCItCkPwsk9qWWYA==
 
+"@rylorin/technicalindicators@^3.1.22":
+  version "3.1.22"
+  resolved "https://registry.yarnpkg.com/@rylorin/technicalindicators/-/technicalindicators-3.1.22.tgz#2a0b7187b8bc0d10612fcd5a704660af2ef154ae"
+  integrity sha512-33Ut1EcPqy4jxK6YZMjwYGDLWmQipY8UerJNDw1cMNmimLz0k32o6oFb69zk/mHz6iNXcj61X57GGKNV6VnNXg==
+
 "@tsconfig/node10@^1.0.7":
   version "1.0.9"
   resolved "https://registry.yarnpkg.com/@tsconfig/node10/-/node10-1.0.9.tgz#df4907fc07a886922637b15e02d4cebc4c0021b2"

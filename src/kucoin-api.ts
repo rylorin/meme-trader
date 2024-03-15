@@ -1,5 +1,5 @@
 import { IConfig } from "config";
-import { LogLevel, gtpLogger } from "./logger";
+import { LogLevel, gLogger } from "./logger";
 
 export type SymbolDesc = {
   symbol: string;
@@ -26,9 +26,10 @@ export class KuCoinApi {
   private readonly api: any;
 
   constructor(config: IConfig) {
-    gtpLogger.log(LogLevel.Debug, "IbWcpConnection.constructor", undefined);
+    gLogger.log(LogLevel.Debug, "IbWcpConnection.constructor", undefined);
     this.config = config;
     this.api = require("kucoin-node-sdk");
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
     this.api.init({
       baseUrl: config.get("kucoin-api.baseUrl"),
       apiAuth: {
@@ -41,15 +42,20 @@ export class KuCoinApi {
   }
 
   public async start(): Promise<void> {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
     const getTimestampRl = await this.api.rest.Others.getTimestamp();
     console.log(getTimestampRl.data);
   }
 
   public async getSymbolsList(market: string): Promise<SymbolDesc[]> {
-    const result = await this.api.rest.Market.Symbols.getSymbolsList({
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+    const result = (await this.api.rest.Market.Symbols.getSymbolsList({
       market,
-    });
-    // console.log(result);
-    return result.data;
+    })) as { code: number; data: SymbolDesc[] };
+    console.log("getSymbolsList", result.data.length);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+    return result.data.sort((a: SymbolDesc, b: SymbolDesc) =>
+      a.symbol.localeCompare(b.symbol),
+    );
   }
 }

@@ -10,13 +10,16 @@
     "build": "tsc --project tsconfig.json",
     "clean": "rm -rf build",
     "lint": "eslint . --ext .ts,.tsx",
-    "prepare": "husky install",
+    "prepare": "husky init",
     "prepublishOnly": "yarn build",
-    "qc": "yarn lint && tsc --noEmit && prettier --check . && stylelint \"**/*.css\"",
+    "qc": "yarn lint && yarn type-check && prettier --check .",
     "start": "NODE_ENV=production node build/index.js",
-    "start:dev": "NODE_ENV=development ts-node-dev --project tsconfig.json src/index"
+    "start:dev": "NODE_ENV=development ts-node-dev --project tsconfig.json src/index",
+    "test": "yarn qc",
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
+    "@rylorin/technicalindicators": "^3.1.22",
     "axios": "^1.6.7",
     "config": "^3.3.11",
     "dotenv": "^16.3.1",
@@ -45,8 +48,6 @@
     "lint-staged": "^15.2.0",
     "patch-package": "^8.0.0",
     "prettier": "^3.1.1",
-    "stylelint": "^16.1.0",
-    "stylelint-config-standard": "^36.0.0",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.4.2"
   },
