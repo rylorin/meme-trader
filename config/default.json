@@ -1,4 +1,8 @@
 {
+  "gLogger": {
+    "console": "debug",
+    "default": "silly"
+  },
   "kucoin-api": {
     "baseUrl": "https://openapi-v2.kucoin.com",
     "apiAuth": {
@@ -7,5 +11,18 @@
       "passphrase": ""
     },
     "authVersion": 2
+  },
+  "trader": {
+    "timeframe": "5min",
+    "fastPeriod": 12,
+    "slowPeriod": 26,
+    "signalPeriod": 9
+  },
+  "stats": {
+    "maxAge": 10,
+    "minVolume": 100000,
+    "maxVolume": 1000000,
+    "minPrice": 1,
+    "minChange": 0.05
   }
 }

@@ -1,3 +1,4 @@
+import { default as config } from "config";
 import stringify from "json-stringify-safe";
 import {
   Logger as WinstonLogger,
@@ -23,15 +24,6 @@ export type LogLevel = (typeof LogLevel)[keyof typeof LogLevel];
 // const brightYellow = [93, 39];
 // const brightBlue = [94, 39];
 
-const level =
-  (parseInt(process.env.LOG_LEVEL as string) as LogLevel) || LogLevel.Info; // Default to info
-const log_modules: string[] = ((process.env.LOG_MODULES as string) || "").split(
-  ",",
-);
-const log_console: string[] = ((process.env.LOG_CONSOLE as string) || "").split(
-  ",",
-);
-
 /**
  * Logger facility class
  */
@@ -39,26 +31,17 @@ export class Logger {
   private loggers: Record<string, WinstonLogger> = {};
 
   constructor() {
-    // this.log_debug_console = (process.env.LOG_DEBUG_CONSOLE as string) == 'true';
-    // const logFilePath = join(app.getPath('logs'), logFile ?? 'backend_log.csv');
-
     // create default logger
-    this.loggers["default"] = this.createLogger("backend_log");
-    // create other loggers
-    log_modules.forEach((item) => {
-      this.loggers[item] = this.createLogger(item);
-    });
+    this.loggers["default"] = this.createLogger("default");
   }
 
   private createLogger(module: string): winston.Logger {
-    const to_console: boolean =
-      log_console.findIndex((item) => item == module) >= 0;
     return createLogger({
       transports: [
         new transports.File({
           dirname: "./logs",
           filename: module + ".csv",
-          level: Logger.level2string(level),
+          level: config.get("gLogger." + module),
           tailable: true,
           format: format.combine(
             format.timestamp(),
@@ -70,7 +53,7 @@ export class Logger {
           maxFiles: 5,
         }),
         new transports.Console({
-          level: to_console ? "debug" : "info",
+          level: config.get("gLogger.console"),
           format: format.combine(
             format.colorize(),
             format.timestamp(),
@@ -148,20 +131,10 @@ export class Logger {
     asset?: string | undefined,
     ...args: any[]
   ): void {
-    let mainmodule: string;
-    let submodule: string;
     let assetString: string;
     if (asset == undefined) assetString = "";
     else if (typeof asset == "string") assetString = asset;
     else assetString = typeof asset;
-    const [s0, s1] = module.split(".");
-    if (s1) {
-      mainmodule = s0;
-      submodule = s1;
-    } else {
-      mainmodule = "default";
-      submodule = s0;
-    }
     const message: string = args
       .map((value) => {
         if (value === undefined) return "undefined";
@@ -172,18 +145,11 @@ export class Logger {
         else return stringify(value);
       })
       .join(", ");
-    if (this.loggers[mainmodule])
-      this.loggers[mainmodule].log({
-        level: Logger.level2string(level),
-        message,
-        service: submodule,
-        asset: assetString,
-      });
     this.loggers["default"].log({
       level: Logger.level2string(level),
       message,
       service: module,
-      asset: "assetString",
+      asset: assetString,
     });
     if (level === LogLevel.Fatal) process.exit(-1);
   }
@@ -213,6 +179,15 @@ export class Logger {
    */
   public info(title: string, description: string): void {
     this.log(LogLevel.Info, title, undefined, description);
+  }
+
+  /**
+   * Display an info notification (and log it)
+   * @param debug title of the notification
+   * @param description content of the notification
+   */
+  public debug(title: string, description: string): void {
+    this.log(LogLevel.Debug, title, undefined, description);
   }
 }
 
