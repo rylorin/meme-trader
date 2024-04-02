@@ -16,13 +16,18 @@
     "timeframe": "5min",
     "fastPeriod": 12,
     "slowPeriod": 26,
-    "signalPeriod": 9
+    "signalPeriod": 9,
+    "confirmPeriods": 3,
+    "tradeBudget": 10
   },
   "stats": {
-    "maxAge": 10,
-    "minVolume": 100000,
-    "maxVolume": 1000000,
+    "maxAge": 12,
+    "minVolume": 0.1,
+    "maxVolume": 20,
     "minPrice": 1,
-    "minChange": 0.05
+    "minChange": 0.1
+  },
+  "telegram": {
+    "apiKey": "replace with your telegram bot api key"
   }
 }

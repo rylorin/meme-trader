@@ -182,12 +182,21 @@ export class Logger {
   }
 
   /**
-   * Display an info notification (and log it)
-   * @param debug title of the notification
+   * Display a debug notification (and log it)
+   * @param title title of the notification
    * @param description content of the notification
    */
   public debug(title: string, description: string): void {
     this.log(LogLevel.Debug, title, undefined, description);
+  }
+
+  /**
+   * Display a debug notification (and log it)
+   * @param trace title of the notification
+   * @param description content of the notification
+   */
+  public trace(title: string, description: string): void {
+    this.log(LogLevel.Trace, title, undefined, description);
   }
 }
 

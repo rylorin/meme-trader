@@ -58,7 +58,6 @@ export class KuCoinApi {
     gLogger.debug("KuCoinApi.constructor", "new instance");
     this.config = config;
     this.api = require("kucoin-node-sdk");
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
     this.api.init({
       baseUrl: config.get("kucoin-api.baseUrl"),
       apiAuth: {
@@ -75,18 +74,29 @@ export class KuCoinApi {
   }
 
   public start(): void {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-    this.datafeed.connectSocket();
-    // const callbackId = this.datafeed.subscribe(
-    //   "/market/candles:BTC-USDT_1hour",
-    //   (message: any) => {
-    //     console.log(message.data);
-    //   },
-    // );
+    gLogger.debug("KuCoinApi.start", "start API");
+    this.datafeed.connectSocket(); // should await
+    /* const callbackId1 = */ this.datafeed.subscribe(
+      "/market/candles:BTC-USDT_1hour",
+      (_message: any) => {
+        // console.log("BTC-USDT_1hour", message);
+      },
+    );
+    /*  const callbackId2 = */ this.datafeed.subscribe(
+      "/spotMarket/tradeOrdersV2",
+      (message: any) => {
+        console.log("tradeOrdersV2", message);
+      },
+    );
+    /*  const callbackId3 = */ this.datafeed.subscribe(
+      "/spotMarket/tradeOrders",
+      (message: any) => {
+        console.log("tradeOrdersV2", message);
+      },
+    );
   }
 
   public heartBeat(): void {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
     this.api.rest.Others.getTimestamp().then(
       (getTimestampRl: { code: number; data: number }) => {
         console.log("getTimestampRl", getTimestampRl.data);
@@ -97,16 +107,13 @@ export class KuCoinApi {
   }
 
   public async getSymbolsList(market: string): Promise<SymbolDesc[]> {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
     const result = (await this.api.rest.Market.Symbols.getSymbolsList({
       market,
     })) as { code: number; data: SymbolDesc[] };
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
     return result.data;
   }
 
   public async get24hrStats(symbol: string): Promise<Stats> {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
     const result = (await this.api.rest.Market.Symbols.get24hrStats(
       symbol,
     )) as { code: number; data: Stats };
@@ -119,13 +126,23 @@ export class KuCoinApi {
     startAt = 0,
     endAt = 0,
   ): Promise<string[][]> {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
     const result = (await this.api.rest.Market.Histories.getMarketCandles(
       symbol,
       type,
       { startAt, endAt },
     )) as { code: number; data: string[][] };
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
     return result.data;
+  }
+
+  public async placeMarketOrder(
+    side: string,
+    symbol: string,
+    size: number,
+  ): Promise<string> {
+    const result = (await this.api.Trade.Orders.postOrder(
+      { side, symbol },
+      { size },
+    )) as { code: number; data: { orderId: string } };
+    return result.data.orderId;
   }
 }

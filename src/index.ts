@@ -1,12 +1,39 @@
-import { default as config } from "config";
+/*
+  MyTradingBotApp
+*/
+import { Context, Telegraf } from "telegraf";
+import { message } from "telegraf/filters";
+
+// Load env vars
 import dotenv from "dotenv";
 dotenv.config(); // eslint-disable-line @typescript-eslint/no-var-requires,@typescript-eslint/no-unsafe-call
 
-import { IConfig } from "config";
-import { gLogger, LogLevel } from "./logger";
+// Load config
+import { default as config, IConfig } from "config";
 
+// The following are relying on env var and config
+import { Message, Update } from "telegraf/typings/core/types/typegram";
+import { CommandContextExtn } from "telegraf/typings/telegram-types";
 import { KuCoinApi, Stats, SymbolDesc } from "./kucoin-api";
+import { gLogger, LogLevel } from "./logger";
 import { MemeTrader } from "./trader";
+
+/**
+ * @internal
+ *
+ * JSON replace function to convert ES6 Maps to tuple arrays.
+ */
+function jsonReplacer(key: string, value: any): any {
+  if (value instanceof Map) {
+    const tuples: [unknown, unknown][] = [];
+    value.forEach((v, k) => {
+      tuples.push([k, v]);
+    });
+    return tuples;
+  } else {
+    return value;
+  }
+}
 
 export class MyTradingBotApp {
   private readonly config: IConfig;
@@ -15,21 +42,102 @@ export class MyTradingBotApp {
   private readonly stats: Record<string, Stats> = {};
 
   private statsLoaded = false;
+  private readonly minVolume: number;
+  private readonly maxVolume: number;
+  private readonly minPrice: number;
+  private readonly minChange: number;
+  private readonly maxAge: number;
 
   constructor(config: IConfig) {
     this.config = config;
     this.api = new KuCoinApi(this.config);
+    this.minVolume = parseFloat(this.config.get("stats.minVolume")) * 1000000;
+    this.maxVolume =
+      parseFloat(this.config.get("stats.maxVolume")) * 1000000 || 9999999999;
+    this.minPrice = parseFloat(this.config.get("stats.minPrice")) || 1;
+    this.minChange = parseFloat(this.config.get("stats.minChange")) || 0.1;
+    this.maxAge = parseInt(this.config.get("stats.maxAge")) || 60;
   }
 
-  public start(): void {
+  public start(): Promise<void> {
     this.api.start();
 
     setInterval(() => this.refreshSymbols(), 1 * 60 * 1000); // update symbols every 1 min
     setInterval(() => this.refreshTraders(), 1 * 60 * 1000); // update traders every 1 min
+
+    // Start telegram bot to control application
+    const bot = new Telegraf(this.config.get("telegram.apiKey"));
+    bot.start((ctx) => ctx.reply("Welcome"));
+    bot.help((ctx) => ctx.reply("Send me a sticker"));
+    bot.on(message("sticker"), (ctx) => ctx.reply("👍"));
+    bot.hears("Hi", (ctx) => ctx.reply("Hey there"));
+    bot.command("oldschool", (ctx) => ctx.reply("Hello"));
+    bot.command("hipster", Telegraf.reply("λ"));
+    bot.command("echo", (ctx) => ctx.reply(ctx.payload));
+    bot.command("symbol", (ctx) => this.handleSymbol(ctx));
+    return bot.launch();
+  }
+
+  /**
+   * Print an object (JSON formatted) to console.
+   */
+  formatObject(obj: unknown): string {
+    return `${JSON.stringify(obj, jsonReplacer, 2)}`;
+  }
+
+  private async handleSymbol(
+    ctx: Context<{
+      message: Update.New & Update.NonChannel & Message.TextMessage;
+      update_id: number;
+    }> &
+      Omit<Context<Update>, keyof Context<Update>> &
+      CommandContextExtn,
+  ): Promise<void> {
+    let keys: string[];
+    gLogger.debug("MyTradingBotApp.handleSymbol", "Handle command");
+    try {
+      if (ctx.payload) {
+        keys = ctx.payload.split(" ");
+        await keys.reduce(
+          (p, key) =>
+            p.then(() =>
+              ctx
+                .reply(this.formatObject(this.stats[key]))
+                .then(() => undefined),
+            ),
+          Promise.resolve(),
+        );
+      } else {
+        keys = Object.keys(this.stats).sort((a, b) => a.localeCompare(b));
+        console.log(keys);
+        if (keys.length) {
+          for (let i = 0; i < keys.length; i = i + 20) {
+            const slice = keys.slice(i, i + 20);
+            if (slice.length)
+              await ctx
+                .reply(slice.join(" "))
+                .catch((err: Error) =>
+                  gLogger.error("MyTradingBotApp.handleSymbol", err.message),
+                );
+          }
+        } else
+          await ctx
+            .reply("none")
+            .catch((err: Error) =>
+              gLogger.error("MyTradingBotApp.handleSymbol", err.message),
+            );
+      }
+    } catch (err: any) {
+      await ctx
+        .reply(err.message) // eslint-disable-line @typescript-eslint/no-unsafe-argument
+        .catch((err: Error) =>
+          gLogger.error("MyTradingBotApp.handleSymbol", err.message),
+        );
+    }
   }
 
   private refreshSymbols(): void {
-    gLogger.debug("main.refreshSymbols", "run");
+    gLogger.trace("MyTradingBotApp.refreshSymbols", "run");
     const now = Date.now();
     this.api
       .getSymbolsList("USDS")
@@ -43,21 +151,18 @@ export class MyTradingBotApp {
           .filter(
             (item) =>
               !this.stats[item.symbol] ||
-              now - this.stats[item.symbol].time >
-                (parseInt(this.config.get("stats.maxAge")) || 60) * 60 * 1000,
+              now - this.stats[item.symbol].time > this.maxAge * 60 * 1000,
           );
         // If no symbol left then our list has been completed
         if (!this.statsLoaded) this.statsLoaded = symbols.length == 0;
-        gLogger.debug("refreshSymbols", `${symbols.length} items`);
+        gLogger.debug(
+          "MyTradingBotApp.refreshSymbols",
+          `${symbols.length} items`,
+        );
         return (
           symbols
             // Keep only n symbols, giving the opportunity to revisit stats twice during maxAge
-            .slice(
-              0,
-              Math.ceil(
-                universe_size / parseInt(this.config.get("stats.maxAge")),
-              ) * 2,
-            )
+            .slice(0, Math.ceil(universe_size / this.maxAge) * 2)
             .reduce(
               (p, item) =>
                 p.then(() =>
@@ -66,7 +171,7 @@ export class MyTradingBotApp {
                       this.stats[item.symbol] = stats;
                       gLogger.log(
                         LogLevel.Info,
-                        "refreshSymbols",
+                        "MyTradingBotApp.refreshSymbols",
                         item.symbol,
                         Object.keys(this.stats).length,
                         "stats",
@@ -81,12 +186,12 @@ export class MyTradingBotApp {
         );
       })
       .catch((error: Error) =>
-        gLogger.error("main.refreshSymbols", error.message),
+        gLogger.error("MyTradingBotApp.refreshSymbols", error.message),
       );
   }
 
   private refreshTraders(): void {
-    gLogger.debug("main.refreshTraders", "run");
+    gLogger.trace("MyTradingBotApp.refreshTraders", "run");
     // Wait for stats being available
     if (!this.statsLoaded) return;
     const _now = Date.now() / 1000;
@@ -100,18 +205,12 @@ export class MyTradingBotApp {
       // Filter on volume
       .filter(
         (item) =>
-          item.volValue >= parseInt(this.config.get("stats.minVolume")) &&
-          item.volValue <= parseInt(this.config.get("stats.maxVolume")),
+          item.volValue >= this.minVolume && item.volValue <= this.maxVolume,
       )
       // Filter on price
-      .filter(
-        (item) => item.last >= parseFloat(this.config.get("stats.minPrice")),
-      )
+      .filter((item) => item.last >= this.minPrice)
       // Only symbols that are up in the last 24 hours
-      .filter(
-        (item) =>
-          item.changeRate >= parseFloat(this.config.get("stats.minChange")),
-      )
+      .filter((item) => item.changeRate >= this.minChange)
       // Check each symbol
       .forEach((item) => {
         // Check if trader already exists
@@ -136,5 +235,6 @@ export class MyTradingBotApp {
 
 gLogger.info("main", `NODE_ENV=${process.env["NODE_ENV"]}`);
 const app = new MyTradingBotApp(config);
-app.start();
-// .catch((err: Error) => gLogger.log(LogLevel.Fatal, "main", undefined, err));
+app
+  .start()
+  .catch((err: Error) => gLogger.log(LogLevel.Fatal, "main", undefined, err));
