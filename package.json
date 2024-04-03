@@ -26,6 +26,7 @@
     "json-stringify-safe": "^5.0.1",
     "kucoin-node-sdk": "Kucoin/kucoin-node-sdk#68aaa4e77e9fe97bb0fd42964cb9edf8229cf138",
     "telegraf": "^4.16.3",
+    "uuid": "^9.0.1",
     "winston": "^3.11.0"
   },
   "devDependencies": {

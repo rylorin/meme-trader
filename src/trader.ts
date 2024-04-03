@@ -4,6 +4,8 @@
 */
 import { macd } from "@rylorin/technicalindicators";
 import { IConfig } from "config";
+import { Telegraf } from "telegraf";
+import { v4 as uuid } from "uuid";
 import { BarSize, KuCoinApi } from "./kucoin-api";
 import { LogLevel, gLogger } from "./logger";
 
@@ -47,11 +49,11 @@ const kuCoin2point = (candle: string[]): Point => ({
 
 export class MemeTrader {
   private readonly config: IConfig;
-  private readonly symbol: string;
   private readonly api: KuCoinApi;
 
   private timer: NodeJS.Timeout | undefined;
 
+  private readonly symbol: string;
   private readonly timeframe: BarSize;
   private readonly macdParams: {
     SimpleMAOscillator: boolean;
@@ -83,10 +85,19 @@ export class MemeTrader {
       fastPeriod: parseInt(this.config.get("trader.fastPeriod")),
       slowPeriod: parseInt(this.config.get("trader.slowPeriod")),
       signalPeriod: parseInt(this.config.get("trader.signalPeriod")),
-      confirmPeriods: parseInt(this.config.get("trader.confirmPeriods")),
+      confirmPeriods: parseInt(this.config.get("trader.confirmPeriods")) || 1,
     };
     this.lastSignal = Signal.None;
     this.tradeBudget = parseInt(this.config.get("trader.tradeBudget"));
+  }
+
+  public toString(): string {
+    return `
+symbol: ${this.symbol}
+isRunning: ${this.isRunning()}
+confirmPeriods: ${this.macdParams.confirmPeriods}
+lastSignal: ${this.lastSignal}
+`;
   }
 
   public isRunning(): boolean {
@@ -127,13 +138,13 @@ export class MemeTrader {
   private computeSignal(candles: Point[]): Signal {
     const macdArg = {
       ...this.macdParams,
-      values: candles!.map((item) => item.close),
+      values: candles.map((item) => item.close),
     };
     const result = macd(macdArg);
     // console.log(macdArg, result);
     if (result.length >= macdArg.slowPeriod) {
       // using n last indicator values
-      const samples = result.slice(this.macdParams.confirmPeriods + 1);
+      const samples = result.slice(-(this.macdParams.confirmPeriods + 1));
       let testBuySignal = true;
       let testSellSignal = true;
       for (let i = 0; i < samples.length - 1; i++) {
@@ -142,6 +153,14 @@ export class MemeTrader {
         if (samples[i + 1].histogram! > samples[i].histogram!)
           testSellSignal = false; // if next sample not higher then don't sell
       }
+      gLogger.log(
+        LogLevel.Trace,
+        "MemeTrader.computeSignal",
+        this.symbol,
+        samples,
+        testBuySignal,
+        testSellSignal,
+      );
       if (testBuySignal) return Signal.BUY;
       else if (testSellSignal) return Signal.SELL;
       else return Signal.None;
@@ -149,7 +168,7 @@ export class MemeTrader {
   }
 
   public check(): void {
-    gLogger.log(LogLevel.Debug, "MemeTrader.check", this.symbol, "run");
+    gLogger.log(LogLevel.Trace, "MemeTrader.check", this.symbol, "run");
     const now = Math.floor(Date.now() / 1000);
     this.api
       .getMarketCandles(
@@ -157,14 +176,14 @@ export class MemeTrader {
         this.timeframe,
         Math.floor(now - 3 * timeframe2secs(this.timeframe)),
       )
+      .then((candles) => candles.map(kuCoin2point))
       .then((candles) => {
-        candles.map(kuCoin2point).forEach((candle) => {
+        candles.forEach((candle) => {
           const idx = this.candles!.findIndex(
             (item) => item.time == candle.time,
           );
           if (idx < 0) {
             // Add non existing candle
-            // console.log(now, candle);
             this.candles!.push(candle);
           }
         });
@@ -175,7 +194,10 @@ export class MemeTrader {
           // Issue a buy signal
           gLogger.log(LogLevel.Warning, "MemeTrader.check", this.symbol, "BUY");
           this.lastSignal = signal;
+          // Telegraf.reply("BUY " + this.symbol);
+          // this.bot.context.reply("text")
           return this.api.placeMarketOrder(
+            uuid(),
             "buy",
             this.symbol,
             this.tradeBudget,
@@ -189,12 +211,19 @@ export class MemeTrader {
             this.symbol,
             "SELL",
           );
+          Telegraf.reply("SELL " + this.symbol);
           this.lastSignal = Signal.SELL;
         }
       })
-      .catch((err: Error) =>
-        gLogger.log(LogLevel.Error, "MemeTrader.check", this.symbol, err),
-      );
+      .catch((err: Error) => {
+        console.error(err);
+        gLogger.log(
+          LogLevel.Error,
+          "MemeTrader.check",
+          this.symbol,
+          err.message,
+        );
+      });
   }
 
   public stop(): void {

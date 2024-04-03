@@ -109,14 +109,16 @@ export class KuCoinApi {
   public async getSymbolsList(market: string): Promise<SymbolDesc[]> {
     const result = (await this.api.rest.Market.Symbols.getSymbolsList({
       market,
-    })) as { code: number; data: SymbolDesc[] };
+    })) as { code: number; msg: string; data: SymbolDesc[] };
+    if (result.code != 200000) throw Error(result.msg);
     return result.data;
   }
 
   public async get24hrStats(symbol: string): Promise<Stats> {
     const result = (await this.api.rest.Market.Symbols.get24hrStats(
       symbol,
-    )) as { code: number; data: Stats };
+    )) as { code: number; msg: string; data: Stats };
+    if (result.code != 200000) throw Error(result.msg);
     return result.data;
   }
 
@@ -130,19 +132,22 @@ export class KuCoinApi {
       symbol,
       type,
       { startAt, endAt },
-    )) as { code: number; data: string[][] };
+    )) as { code: number; msg: string; data: string[][] };
+    if (result.code != 200000) throw Error(result.msg);
     return result.data;
   }
 
   public async placeMarketOrder(
-    side: string,
+    clientOid: string,
+    side: "buy" | "sell",
     symbol: string,
-    size: number,
+    funds: number,
   ): Promise<string> {
-    const result = (await this.api.Trade.Orders.postOrder(
-      { side, symbol },
-      { size },
-    )) as { code: number; data: { orderId: string } };
+    const result = (await this.api.rest.Trade.Orders.postOrder(
+      { clientOid, type: "market", side, symbol },
+      { funds },
+    )) as { code: number; msg: string; data: { orderId: string } };
+    if (result.code != 200000) throw Error(result.msg);
     return result.data.orderId;
   }
 }

@@ -38,6 +38,7 @@ function jsonReplacer(key: string, value: any): any {
 export class MyTradingBotApp {
   private readonly config: IConfig;
   private readonly api: KuCoinApi;
+  private readonly bot: Telegraf;
   private readonly traders: Record<string, MemeTrader> = {};
   private readonly stats: Record<string, Stats> = {};
 
@@ -54,9 +55,19 @@ export class MyTradingBotApp {
     this.minVolume = parseFloat(this.config.get("stats.minVolume")) * 1000000;
     this.maxVolume =
       parseFloat(this.config.get("stats.maxVolume")) * 1000000 || 9999999999;
-    this.minPrice = parseFloat(this.config.get("stats.minPrice")) || 1;
+    this.minPrice = parseFloat(this.config.get("stats.minPrice"));
     this.minChange = parseFloat(this.config.get("stats.minChange")) || 0.1;
     this.maxAge = parseInt(this.config.get("stats.maxAge")) || 60;
+
+    // Create telegram bot to control application
+    this.bot = new Telegraf(this.config.get("telegram.apiKey"));
+    this.bot.start((ctx) => ctx.reply("Welcome"));
+    this.bot.help((ctx) => ctx.reply("Send me a sticker"));
+    this.bot.on(message("sticker"), (ctx) => ctx.reply("👍"));
+    this.bot.hears("Hi", (ctx) => ctx.reply("Hey there"));
+    this.bot.command("echo", (ctx) => ctx.reply(ctx.payload));
+    this.bot.command("symbol", (ctx) => this.handleSymbolCommand(ctx));
+    this.bot.command("trader", (ctx) => this.handleTraderCommand(ctx));
   }
 
   public start(): Promise<void> {
@@ -65,17 +76,7 @@ export class MyTradingBotApp {
     setInterval(() => this.refreshSymbols(), 1 * 60 * 1000); // update symbols every 1 min
     setInterval(() => this.refreshTraders(), 1 * 60 * 1000); // update traders every 1 min
 
-    // Start telegram bot to control application
-    const bot = new Telegraf(this.config.get("telegram.apiKey"));
-    bot.start((ctx) => ctx.reply("Welcome"));
-    bot.help((ctx) => ctx.reply("Send me a sticker"));
-    bot.on(message("sticker"), (ctx) => ctx.reply("👍"));
-    bot.hears("Hi", (ctx) => ctx.reply("Hey there"));
-    bot.command("oldschool", (ctx) => ctx.reply("Hello"));
-    bot.command("hipster", Telegraf.reply("λ"));
-    bot.command("echo", (ctx) => ctx.reply(ctx.payload));
-    bot.command("symbol", (ctx) => this.handleSymbol(ctx));
-    return bot.launch();
+    return this.bot.launch();
   }
 
   /**
@@ -85,7 +86,7 @@ export class MyTradingBotApp {
     return `${JSON.stringify(obj, jsonReplacer, 2)}`;
   }
 
-  private async handleSymbol(
+  private async handleSymbolCommand(
     ctx: Context<{
       message: Update.New & Update.NonChannel & Message.TextMessage;
       update_id: number;
@@ -94,10 +95,11 @@ export class MyTradingBotApp {
       CommandContextExtn,
   ): Promise<void> {
     let keys: string[];
-    gLogger.debug("MyTradingBotApp.handleSymbol", "Handle command");
+    gLogger.debug("MyTradingBotApp.handleSymbol", "Handle 'symbol' command");
     try {
       if (ctx.payload) {
-        keys = ctx.payload.split(" ");
+        keys = ctx.payload.trim().replaceAll("  ", " ").split(" ");
+        await ctx.reply(`${keys.length} symbol(s):`);
         await keys.reduce(
           (p, key) =>
             p.then(() =>
@@ -109,22 +111,78 @@ export class MyTradingBotApp {
         );
       } else {
         keys = Object.keys(this.stats).sort((a, b) => a.localeCompare(b));
-        console.log(keys);
+        // console.log(keys);
         if (keys.length) {
-          for (let i = 0; i < keys.length; i = i + 20) {
-            const slice = keys.slice(i, i + 20);
-            if (slice.length)
+          await ctx.reply(`${keys.length} symbol(s):`);
+          for (let i = 0; i < keys.length; i = i + 35) {
+            // Previously 35 (and working)
+            const slice = keys.slice(i, i + 35);
+            if (slice.length) {
               await ctx
                 .reply(slice.join(" "))
                 .catch((err: Error) =>
                   gLogger.error("MyTradingBotApp.handleSymbol", err.message),
                 );
+            }
           }
         } else
           await ctx
             .reply("none")
             .catch((err: Error) =>
               gLogger.error("MyTradingBotApp.handleSymbol", err.message),
+            );
+      }
+    } catch (err: any) {
+      await ctx
+        .reply(err.message) // eslint-disable-line @typescript-eslint/no-unsafe-argument
+        .catch((err: Error) =>
+          gLogger.error("MyTradingBotApp.handleSymbol", err.message),
+        );
+    }
+  }
+
+  private async handleTraderCommand(
+    ctx: Context<{
+      message: Update.New & Update.NonChannel & Message.TextMessage;
+      update_id: number;
+    }> &
+      Omit<Context<Update>, keyof Context<Update>> &
+      CommandContextExtn,
+  ): Promise<void> {
+    let keys: string[];
+    gLogger.debug("MyTradingBotApp.handleTrader", "Handle 'trader' command");
+    try {
+      if (ctx.payload) {
+        keys = ctx.payload.trim().replaceAll("  ", " ").split(" ");
+        await ctx.reply(`${keys.length} symbol(s):`);
+        await keys.reduce(
+          (p, key) =>
+            p.then(() =>
+              ctx.reply(this.traders[key].toString()).then(() => undefined),
+            ),
+          Promise.resolve(),
+        );
+      } else {
+        keys = Object.keys(this.traders).sort((a, b) => a.localeCompare(b));
+        // console.log(keys);
+        if (keys.length) {
+          await ctx.reply(`${keys.length} symbol(s):`);
+          // Previously 25 (and working)
+          for (let i = 0; i < keys.length; i = i + 30) {
+            const slice = keys.slice(i, i + 30);
+            if (slice.length) {
+              await ctx
+                .reply(slice.join(" "))
+                .catch((err: Error) =>
+                  gLogger.error("MyTradingBotApp.handleTrader", err.message),
+                );
+            }
+          }
+        } else
+          await ctx
+            .reply("none")
+            .catch((err: Error) =>
+              gLogger.error("MyTradingBotApp.handleTrader", err.message),
             );
       }
     } catch (err: any) {
@@ -167,18 +225,7 @@ export class MyTradingBotApp {
               (p, item) =>
                 p.then(() =>
                   this.api.get24hrStats(item.symbol).then((stats: Stats) => {
-                    if (!this.stats[item.symbol]) {
-                      this.stats[item.symbol] = stats;
-                      gLogger.log(
-                        LogLevel.Info,
-                        "MyTradingBotApp.refreshSymbols",
-                        item.symbol,
-                        Object.keys(this.stats).length,
-                        "stats",
-                      );
-                    } else {
-                      this.stats[item.symbol] = { ...stats };
-                    }
+                    this.stats[item.symbol] = stats;
                   }),
                 ),
               Promise.resolve(),
@@ -212,7 +259,7 @@ export class MyTradingBotApp {
       // Only symbols that are up in the last 24 hours
       .filter((item) => item.changeRate >= this.minChange)
       // Check each symbol
-      .forEach((item) => {
+      .map((item) => {
         // Check if trader already exists
         if (!this.traders[item.symbol]) {
           // Create traders
@@ -226,10 +273,18 @@ export class MyTradingBotApp {
             `${Object.keys(this.traders).length} trader(s)`,
           );
           // Start it within next 5 mins
-          const delay = 5 * 60 * 1000 * Math.random();
-          setTimeout(() => this.traders[item.symbol].start(), delay);
+          // const delay = 5 * 60 * 1000 * Math.random();
+          // setTimeout(() => this.traders[item.symbol].start(), delay);
         }
-      });
+        return item;
+      })
+      .reduce(
+        (p, item) => p.then(() => this.traders[item.symbol].start()),
+        Promise.resolve(),
+      )
+      .catch((error: Error) =>
+        gLogger.error("MyTradingBotApp.refreshTraders", error.message),
+      );
   }
 }
 
