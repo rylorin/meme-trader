@@ -24,6 +24,14 @@ export const Signal = {
 } as const;
 export type Signal = (typeof Signal)[keyof typeof Signal];
 
+export const State = {
+  Idle: undefined,
+  BUYING: "Buying",
+  POSITION: "Position",
+  SELLING: "Selling",
+} as const;
+export type State = (typeof State)[keyof typeof State];
+
 const timeframe2secs = (timeframe: string): number => {
   switch (timeframe) {
     case BarSize.MINUTES_FIVE:
@@ -67,6 +75,8 @@ export class MemeTrader {
 
   private lastSignal: Signal;
   private tradeBudget: number;
+  private state: State;
+  // private buy_orderId:string;
 
   constructor(config: IConfig, api: KuCoinApi, symbol: string) {
     gLogger.log(
@@ -104,7 +114,7 @@ lastSignal: ${this.lastSignal}
     return !!this.timer;
   }
 
-  public start(): void {
+  public start(): Promise<void> {
     gLogger.log(
       LogLevel.Info,
       "MemeTrader.start",
@@ -112,7 +122,11 @@ lastSignal: ${this.lastSignal}
       "Starting trader",
     );
     const now = Math.floor(Date.now() / 1000);
-    this.api
+    this.timer = setInterval(
+      () => this.check(),
+      (timeframe2secs(this.timeframe) * 1000) / 2,
+    );
+    return this.api
       .getMarketCandles(
         this.symbol,
         this.timeframe,
@@ -129,10 +143,6 @@ lastSignal: ${this.lastSignal}
       .catch((err: Error) =>
         gLogger.log(LogLevel.Error, "MemeTrader.start", this.symbol, err),
       );
-    this.timer = setInterval(
-      () => this.check(),
-      (timeframe2secs(this.timeframe) * 1000) / 2,
-    );
   }
 
   private computeSignal(candles: Point[]): Signal {

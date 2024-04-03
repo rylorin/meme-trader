@@ -49,6 +49,26 @@ export type Stats = {
   makerCoefficient: number; // Maker Fee Coefficient
 };
 
+export type Fill = {
+  symbol: string; //symbol
+  tradeId: string; //trade id
+  orderId: string; //order id
+  counterOrderId: string; //counter order id
+  side: "buy" | "sell"; //transaction direction,include buy and sell
+  liquidity: "taker" | "maker"; //include taker and maker
+  forceTaker: boolean; //forced to become taker
+  price: number; //order price
+  size: number; //order quantity
+  funds: number; //order funds
+  fee: number; //fee
+  feeRate: number; //fee rate
+  feeCurrency: string; // charge fee currency
+  stop: string; // stop type
+  type: string; // order type,e.g. limit,market,stop_limit.
+  createdAt: number; //time
+  tradeType: "TRADE" | "MARGIN_TRADE";
+};
+
 export class KuCoinApi {
   protected config: IConfig;
   private readonly api: any;
@@ -150,4 +170,84 @@ export class KuCoinApi {
     if (result.code != 200000) throw Error(result.msg);
     return result.data.orderId;
   }
+
+  public async getFillsList(): Promise<{
+    currentPage: number;
+    pageSize: number;
+    totalNum: number;
+    totalPage: number;
+    items: Fill[];
+  }> {
+    const result = (await this.api.rest.Trade.Fills.getFillsList(
+      "TRADE",
+      {},
+    )) as {
+      code: number;
+      msg: string;
+      data: {
+        currentPage: number;
+        pageSize: number;
+        totalNum: number;
+        totalPage: number;
+        items: Fill[];
+      };
+    };
+    if (result.code != 200000) throw Error(result.msg);
+    // console.log(result);
+    return result.data;
+  }
+
+  public async getOrdersList(): Promise<{
+    currentPage: number;
+    pageSize: number;
+    totalNum: number;
+    totalPage: number;
+    items: any[];
+  }> {
+    const result = (await this.api.rest.Trade.Orders.getOrdersList(
+      "TRADE",
+      {},
+    )) as {
+      code: number;
+      msg: string;
+      data: {
+        currentPage: number;
+        pageSize: number;
+        totalNum: number;
+        totalPage: number;
+        items: any[];
+      };
+    };
+    if (result.code != 200000) throw Error(result.msg);
+    // console.log(result);
+    return result.data;
+  }
+
+  /*
+  public async getPositionDetails(): Promise<any> {
+    console.log("getPositionDetails");
+    const result = (await this.api.rest.Trade.Positions.getPositionDetails(
+      "BTC-USDT",
+    )) as {
+      code: number;
+      msg: string;
+      data: any;
+    };
+    if (result.code != 200000) throw Error(result.msg);
+    // console.log(result);
+    return result.data;
+  }
+
+  public async getPositionsList(): Promise<any> {
+    console.log("getPositionsList");
+    const result = (await this.api.rest.Trade.Positions.getPositionsList()) as {
+      code: number;
+      msg: string;
+      data: any;
+    };
+    if (result.code != 200000) throw Error(result.msg);
+    // console.log(result);
+    return result.data;
+  }
+  */
 }

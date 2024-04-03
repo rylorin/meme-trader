@@ -41,6 +41,7 @@ export class MyTradingBotApp {
   private readonly bot: Telegraf;
   private readonly traders: Record<string, MemeTrader> = {};
   private readonly stats: Record<string, Stats> = {};
+  private timer: NodeJS.Timeout | undefined;
 
   private statsLoaded = false;
   private readonly minVolume: number;
@@ -73,8 +74,15 @@ export class MyTradingBotApp {
   public start(): Promise<void> {
     this.api.start();
 
-    setInterval(() => this.refreshSymbols(), 1 * 60 * 1000); // update symbols every 1 min
-    setInterval(() => this.refreshTraders(), 1 * 60 * 1000); // update traders every 1 min
+    this.timer = setInterval(
+      () => {
+        this.check().catch((err: Error) => {
+          console.log(err);
+          gLogger.error("MyTradingBotApp.check", err.message);
+        });
+      },
+      1 * 60 * 1000,
+    ); // run checks every 1 min
 
     return this.bot.launch();
   }
@@ -98,7 +106,11 @@ export class MyTradingBotApp {
     gLogger.debug("MyTradingBotApp.handleSymbol", "Handle 'symbol' command");
     try {
       if (ctx.payload) {
-        keys = ctx.payload.trim().replaceAll("  ", " ").split(" ");
+        keys = ctx.payload
+          .trim()
+          .replaceAll("  ", " ")
+          .toUpperCase()
+          .split(" ");
         await ctx.reply(`${keys.length} symbol(s):`);
         await keys.reduce(
           (p, key) =>
@@ -153,7 +165,11 @@ export class MyTradingBotApp {
     gLogger.debug("MyTradingBotApp.handleTrader", "Handle 'trader' command");
     try {
       if (ctx.payload) {
-        keys = ctx.payload.trim().replaceAll("  ", " ").split(" ");
+        keys = ctx.payload
+          .trim()
+          .replaceAll("  ", " ")
+          .toUpperCase()
+          .split(" ");
         await ctx.reply(`${keys.length} symbol(s):`);
         await keys.reduce(
           (p, key) =>
@@ -194,10 +210,10 @@ export class MyTradingBotApp {
     }
   }
 
-  private refreshSymbols(): void {
+  private refreshSymbols(): Promise<void> {
     gLogger.trace("MyTradingBotApp.refreshSymbols", "run");
     const now = Date.now();
-    this.api
+    return this.api
       .getSymbolsList("USDS")
       .then((symbols: SymbolDesc[]) => {
         symbols = symbols
@@ -237,54 +253,71 @@ export class MyTradingBotApp {
       );
   }
 
-  private refreshTraders(): void {
+  private refreshTraders(): Promise<void> {
     gLogger.trace("MyTradingBotApp.refreshTraders", "run");
     // Wait for stats being available
-    if (!this.statsLoaded) return;
+    if (!this.statsLoaded) return Promise.resolve();
     const _now = Date.now() / 1000;
-    Object.keys(this.stats)
-      .map((key) => this.stats[key])
-      // If trader not yet running
-      .filter(
-        (item) =>
-          !this.traders[item.symbol] || !this.traders[item.symbol].isRunning(),
-      )
-      // Filter on volume
-      .filter(
-        (item) =>
-          item.volValue >= this.minVolume && item.volValue <= this.maxVolume,
-      )
-      // Filter on price
-      .filter((item) => item.last >= this.minPrice)
-      // Only symbols that are up in the last 24 hours
-      .filter((item) => item.changeRate >= this.minChange)
-      // Check each symbol
-      .map((item) => {
-        // Check if trader already exists
-        if (!this.traders[item.symbol]) {
-          // Create traders
-          this.traders[item.symbol] = new MemeTrader(
-            this.config,
-            this.api,
-            item.symbol,
-          );
-          gLogger.info(
-            "refreshTraders",
-            `${Object.keys(this.traders).length} trader(s)`,
-          );
-          // Start it within next 5 mins
-          // const delay = 5 * 60 * 1000 * Math.random();
-          // setTimeout(() => this.traders[item.symbol].start(), delay);
-        }
-        return item;
-      })
-      .reduce(
-        (p, item) => p.then(() => this.traders[item.symbol].start()),
-        Promise.resolve(),
-      )
-      .catch((error: Error) =>
-        gLogger.error("MyTradingBotApp.refreshTraders", error.message),
-      );
+    return (
+      Object.keys(this.stats)
+        .map((key) => this.stats[key])
+        // If trader not yet running
+        .filter(
+          (item) =>
+            !this.traders[item.symbol] ||
+            !this.traders[item.symbol].isRunning(),
+        )
+        // Filter on volume
+        .filter(
+          (item) =>
+            item.volValue >= this.minVolume && item.volValue <= this.maxVolume,
+        )
+        // Filter on price
+        .filter((item) => item.last >= this.minPrice)
+        // Only symbols that are up in the last 24 hours
+        .filter((item) => item.changeRate >= this.minChange)
+        // Check each symbol
+        .map((item) => {
+          // Check if trader already exists
+          if (!this.traders[item.symbol]) {
+            // Create traders
+            this.traders[item.symbol] = new MemeTrader(
+              this.config,
+              this.api,
+              item.symbol,
+            );
+            gLogger.info(
+              "refreshTraders",
+              `${Object.keys(this.traders).length} trader(s)`,
+            );
+            // Start it within next 5 mins
+            // const delay = 5 * 60 * 1000 * Math.random();
+            // setTimeout(() => this.traders[item.symbol].start(), delay);
+          }
+          return item;
+        })
+        .reduce(
+          (p, item) => p.then(() => this.traders[item.symbol].start()),
+          Promise.resolve(),
+        )
+        .catch((error: Error) =>
+          gLogger.error("MyTradingBotApp.refreshTraders", error.message),
+        )
+    );
+  }
+
+  private async check(): Promise<void> {
+    gLogger.trace("MyTradingBotApp.refreshTraders", "check");
+    await this.refreshSymbols();
+    await this.refreshTraders();
+    // const fills = await this.api.getFillsList();
+    // fills.items.forEach((item) => console.log(item));
+    // const orders = await this.api.getOrdersList();
+    // orders.items.forEach((item) => console.log(item));
+    // const positions = await this.api.getPositionsList();
+    // console.log(positions);
+    // const position = await this.api.getPositionDetails();
+    // console.log(position);
   }
 }
 
