@@ -18,14 +18,14 @@
     "slowPeriod": 26,
     "signalPeriod": 9,
     "confirmPeriods": 4,
-    "tradeBudget": 2
+    "tradeBudget": 1
   },
   "stats": {
     "maxAge": 12,
     "minVolume": 0.1,
     "maxVolume": 0,
-    "minPrice": 1,
-    "minChange": 0.1
+    "minPrice": 0.1,
+    "minChange": 0
   },
   "telegram": {
     "apiKey": "replace with your telegram bot api key"

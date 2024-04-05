@@ -69,6 +69,39 @@ export type Fill = {
   tradeType: "TRADE" | "MARGIN_TRADE";
 };
 
+export type Order = {
+  id: string; //orderid
+  symbol: string; //symbol
+  opType: "DEAL"; // operation type: DEAL
+  type: string; // order type,e.g. limit,market,stop_limit.
+  side: "buy" | "sell"; // transaction direction,include buy and sell
+  price: number; // order price
+  size: number; // order quantity
+  funds: number; // order funds
+  dealFunds: number; // deal funds
+  dealSize: number; // deal quantity
+  fee: number; // fee
+  feeCurrency: string; // charge fee currency
+  stp: string; // self trade prevention,include CN,CO,DC,CB
+  stop: string; // stop type
+  stopTriggered: boolean; // stop order is triggered
+  stopPrice: number; // stop price
+  timeInForce: string; // time InForce,include GTC,GTT,IOC,FOK
+  postOnly: boolean; // postOnly
+  hidden: boolean; // hidden order
+  iceberg: boolean; // iceberg order
+  visibleSize: number; // display quantity for iceberg order
+  cancelAfter: number; // cancel orders time，requires timeInForce to be GTT
+  channel: string; // order source
+  clientOid: string; // user-entered order unique mark
+  remark: string; // remark
+  tags: string; // tag order source
+  isActive: boolean; // status before unfilled or uncancelled
+  cancelExist: boolean; // order cancellation transaction record
+  createdAt: number; // create time
+  tradeType: "TRADE";
+};
+
 export class KuCoinApi {
   protected config: IConfig;
   private readonly api: any;
@@ -161,13 +194,13 @@ export class KuCoinApi {
     clientOid: string,
     side: "buy" | "sell",
     symbol: string,
-    funds: number,
+    opts: { funds?: number; size?: number },
   ): Promise<string> {
     const result = (await this.api.rest.Trade.Orders.postOrder(
       { clientOid, type: "market", side, symbol },
-      { funds },
+      { funds: opts.funds, size: opts.size },
     )) as { code: number; msg: string; data: { orderId: string } };
-    if (result.code != 200000) throw Error(result.msg);
+    if (result.code != 200000) throw Error(`#${result.code}: ${result.msg}`);
     return result.data.orderId;
   }
 
@@ -193,7 +226,6 @@ export class KuCoinApi {
       };
     };
     if (result.code != 200000) throw Error(result.msg);
-    // console.log(result);
     return result.data;
   }
 
@@ -202,7 +234,7 @@ export class KuCoinApi {
     pageSize: number;
     totalNum: number;
     totalPage: number;
-    items: any[];
+    items: Order[];
   }> {
     const result = (await this.api.rest.Trade.Orders.getOrdersList(
       "TRADE",
@@ -215,7 +247,7 @@ export class KuCoinApi {
         pageSize: number;
         totalNum: number;
         totalPage: number;
-        items: any[];
+        items: Order[];
       };
     };
     if (result.code != 200000) throw Error(result.msg);

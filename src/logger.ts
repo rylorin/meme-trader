@@ -50,7 +50,7 @@ export class Logger {
             }),
           ),
           maxsize: 2 * 1024 * 1024, // 2Mb
-          maxFiles: 5,
+          maxFiles: 3,
         }),
         new transports.Console({
           level: config.get("gLogger.console"),

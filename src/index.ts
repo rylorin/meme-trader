@@ -14,7 +14,7 @@ import { default as config, IConfig } from "config";
 // The following are relying on env var and config
 import { Message, Update } from "telegraf/typings/core/types/typegram";
 import { CommandContextExtn } from "telegraf/typings/telegram-types";
-import { KuCoinApi, Stats, SymbolDesc } from "./kucoin-api";
+import { KuCoinApi, Order, Stats, SymbolDesc } from "./kucoin-api";
 import { gLogger, LogLevel } from "./logger";
 import { MemeTrader } from "./trader";
 
@@ -174,7 +174,7 @@ export class MyTradingBotApp {
         await keys.reduce(
           (p, key) =>
             p.then(() =>
-              ctx.reply(this.traders[key].toString()).then(() => undefined),
+              ctx.reply(this.traders[key]?.toString()).then(() => undefined),
             ),
           Promise.resolve(),
         );
@@ -210,8 +210,8 @@ export class MyTradingBotApp {
     }
   }
 
-  private refreshSymbols(): Promise<void> {
-    gLogger.trace("MyTradingBotApp.refreshSymbols", "run");
+  private updateStats(): Promise<void> {
+    gLogger.trace("MyTradingBotApp.updateStats", "run");
     const now = Date.now();
     return this.api
       .getSymbolsList("USDS")
@@ -229,10 +229,7 @@ export class MyTradingBotApp {
           );
         // If no symbol left then our list has been completed
         if (!this.statsLoaded) this.statsLoaded = symbols.length == 0;
-        gLogger.debug(
-          "MyTradingBotApp.refreshSymbols",
-          `${symbols.length} items`,
-        );
+        gLogger.debug("MyTradingBotApp.updateStats", `${symbols.length} items`);
         return (
           symbols
             // Keep only n symbols, giving the opportunity to revisit stats twice during maxAge
@@ -249,75 +246,110 @@ export class MyTradingBotApp {
         );
       })
       .catch((error: Error) =>
-        gLogger.error("MyTradingBotApp.refreshSymbols", error.message),
+        gLogger.error("MyTradingBotApp.updateStats", error.message),
       );
   }
 
-  private refreshTraders(): Promise<void> {
-    gLogger.trace("MyTradingBotApp.refreshTraders", "run");
+  private createTraders(): Promise<void> {
+    gLogger.trace("MyTradingBotApp.createTraders", "run");
     // Wait for stats being available
     if (!this.statsLoaded) return Promise.resolve();
     const _now = Date.now() / 1000;
-    return (
-      Object.keys(this.stats)
-        .map((key) => this.stats[key])
-        // If trader not yet running
-        .filter(
-          (item) =>
-            !this.traders[item.symbol] ||
-            !this.traders[item.symbol].isRunning(),
-        )
-        // Filter on volume
-        .filter(
-          (item) =>
-            item.volValue >= this.minVolume && item.volValue <= this.maxVolume,
-        )
-        // Filter on price
-        .filter((item) => item.last >= this.minPrice)
-        // Only symbols that are up in the last 24 hours
-        .filter((item) => item.changeRate >= this.minChange)
-        // Check each symbol
-        .map((item) => {
-          // Check if trader already exists
-          if (!this.traders[item.symbol]) {
-            // Create traders
-            this.traders[item.symbol] = new MemeTrader(
-              this.config,
-              this.api,
-              item.symbol,
-            );
-            gLogger.info(
-              "refreshTraders",
-              `${Object.keys(this.traders).length} trader(s)`,
-            );
-            // Start it within next 5 mins
-            // const delay = 5 * 60 * 1000 * Math.random();
-            // setTimeout(() => this.traders[item.symbol].start(), delay);
-          }
-          return item;
-        })
-        .reduce(
-          (p, item) => p.then(() => this.traders[item.symbol].start()),
-          Promise.resolve(),
-        )
-        .catch((error: Error) =>
-          gLogger.error("MyTradingBotApp.refreshTraders", error.message),
-        )
-    );
+    // return (
+    Object.keys(this.stats)
+      .map((key) => this.stats[key])
+      // If trader not yet running
+      .filter(
+        (item) =>
+          !this.traders[item.symbol] || !this.traders[item.symbol].isRunning(),
+      )
+      // Filter on volume
+      .filter(
+        (item) =>
+          item.volValue >= this.minVolume && item.volValue <= this.maxVolume,
+      )
+      // Filter on price
+      .filter((item) => item.last >= this.minPrice)
+      // Only symbols that are up for some % in the last 24 hours
+      .filter((item) => item.changeRate >= this.minChange)
+      // Check each symbol
+      .filter((item) => {
+        if (!this.traders[item.symbol]) {
+          // Create trader that doesn't exist
+          this.traders[item.symbol] = new MemeTrader(
+            this.config,
+            this.api,
+            item.symbol,
+          );
+          gLogger.info(
+            "MyTradingBotApp.createTraders",
+            `${Object.keys(this.traders).length} trader(s)`,
+          );
+        }
+        return !this.traders[item.symbol].isRunning();
+      })
+      .reduce(
+        (p, item) => p.then(() => this.traders[item.symbol].start()),
+        Promise.resolve(),
+      )
+      .catch((error: Error) =>
+        gLogger.error("MyTradingBotApp.createTraders", error.message),
+      );
+    return Promise.resolve();
+  }
+
+  private runTraders(): Promise<void> {
+    return Object.keys(this.traders)
+      .filter((key) => this.traders[key].isRunning())
+      .reduce(
+        (p, key) => p.then(() => this.traders[key].check()),
+        Promise.resolve(),
+      );
   }
 
   private async check(): Promise<void> {
     gLogger.trace("MyTradingBotApp.refreshTraders", "check");
-    await this.refreshSymbols();
-    await this.refreshTraders();
-    // const fills = await this.api.getFillsList();
-    // fills.items.forEach((item) => console.log(item));
-    // const orders = await this.api.getOrdersList();
-    // orders.items.forEach((item) => console.log(item));
-    // const positions = await this.api.getPositionsList();
-    // console.log(positions);
-    // const position = await this.api.getPositionDetails();
-    // console.log(position);
+    await this.updateStats();
+    await this.createTraders();
+
+    let orders = (await this.api.getOrdersList()).items;
+    // Extract last order for each symbol
+    orders = orders.reduce((p: Order[], order: Order): Order[] => {
+      if (p.findIndex((item) => item.symbol == order.symbol) < 0) p.push(order);
+      return p;
+    }, [] as Order[]);
+    // console.log(orders);
+    await orders
+      .filter((order) => {
+        // Only consider non active (completed) orders
+        if (order!.side == "buy") {
+          // If buy order then we consider that we have an open position and therefore we need to manage it
+          if (!this.traders[order.symbol]) {
+            // Create trader that doesn't exist
+            this.traders[order.symbol] = new MemeTrader(
+              this.config,
+              this.api,
+              order.symbol,
+            );
+          }
+          // Propagate info
+          this.traders[order.symbol].setOrder(order!);
+          // Start a non running trader
+          return !this.traders[order.symbol].isRunning();
+        } else if (order!.side == "sell") {
+          // If sell order then we only need to propagate info
+          if (this.traders[order.symbol])
+            this.traders[order.symbol].setOrder(order!);
+          // we don't need to start/stop trader
+          return false;
+        }
+      })
+      .reduce(
+        (p, order) => p.then(() => this.traders[order.symbol].start()),
+        Promise.resolve(),
+      );
+
+    await this.runTraders();
   }
 }
 
