@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 import { IConfig } from "config";
-import { gLogger } from "./logger";
+import { LogLevel, gLogger } from "./logger";
 
 export const BarSize = {
   MINUTES_FIVE: "5min",
@@ -200,7 +200,18 @@ export class KuCoinApi {
       { clientOid, type: "market", side, symbol },
       { funds: opts.funds, size: opts.size },
     )) as { code: number; msg: string; data: { orderId: string } };
-    if (result.code != 200000) throw Error(`#${result.code}: ${result.msg}`);
+    if (result.code != 200000) {
+      gLogger.log(
+        LogLevel.Error,
+        "KuCoinApi.placeMarketOrder",
+        symbol,
+        result.code,
+        result.msg,
+        { clientOid, type: "market", side, symbol },
+        { funds: opts.funds, size: opts.size },
+      );
+      throw Error(`#${result.code}: ${result.msg}`);
+    }
     return result.data.orderId;
   }
 

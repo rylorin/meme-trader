@@ -1,6 +1,6 @@
 {
   "gLogger": {
-    "console": "info",
+    "console": "debug",
     "default": "silly"
   },
   "kucoin-api": {
@@ -17,7 +17,8 @@
     "fastPeriod": 12,
     "slowPeriod": 26,
     "signalPeriod": 9,
-    "confirmPeriods": 4,
+    "upConfirmations": 4,
+    "downConfirmations": 2,
     "tradeBudget": 1
   },
   "stats": {

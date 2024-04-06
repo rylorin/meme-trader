@@ -69,15 +69,18 @@ export class MemeTrader {
     fastPeriod: number;
     slowPeriod: number;
     signalPeriod: number;
-    confirmPeriods: number;
   };
+  private readonly upConfirmations: number;
+  private readonly downConfirmations: number;
   private readonly candles: Point[];
 
   private lastSignal: Signal;
   private tradeBudget: number;
   private state: State;
-  private orderId: string | undefined;
   private position: number;
+
+  // For debugging
+  private lastOrder: Order | undefined;
 
   constructor(config: IConfig, api: KuCoinApi, symbol: string) {
     gLogger.log(
@@ -96,9 +99,15 @@ export class MemeTrader {
       fastPeriod: parseInt(this.config.get("trader.fastPeriod")),
       slowPeriod: parseInt(this.config.get("trader.slowPeriod")),
       signalPeriod: parseInt(this.config.get("trader.signalPeriod")),
-      confirmPeriods: parseInt(this.config.get("trader.confirmPeriods")) || 1,
     };
-    this.tradeBudget = parseInt(this.config.get("trader.tradeBudget")) || 1;
+    (this.upConfirmations = parseInt(
+      this.config.get("trader.upConfirmations"),
+    )),
+      (this.downConfirmations = parseInt(
+        this.config.get("trader.downConfirmations"),
+      )),
+      (this.tradeBudget =
+        parseFloat(this.config.get("trader.tradeBudget")) || 1);
     this.lastSignal = Signal.None;
     this.state = State.Idle;
     this.position = 0;
@@ -109,11 +118,15 @@ export class MemeTrader {
   public toString(): string {
     return `
 symbol: ${this.symbol}
+tradeBudget: ${this.tradeBudget}
 isRunning: ${this.isRunning()}
-confirmPeriods: ${this.macdParams.confirmPeriods}
+upConfirmations: ${this.upConfirmations}
+downConfirmations: ${this.downConfirmations}
 lastSignal: ${this.lastSignal}
 state: ${this.state}
 position: ${this.position}
+candles: ${this.candles.length} item(s)
+order: ${JSON.stringify(this.lastOrder)}
 `;
   }
 
@@ -138,10 +151,6 @@ position: ${this.position}
       return Promise.resolve();
     }
     this.running = true;
-    // this.timer = setInterval(
-    //   () => this.check(),
-    //   (timeframe2secs(this.timeframe) * 1000) / 2,
-    // );
     return this.updateCandles()
       .then(() => undefined)
       .catch((err: Error) =>
@@ -182,23 +191,25 @@ position: ${this.position}
       values: candles.map((item) => item.close),
     };
     const result = macd(macdArg);
-    // console.log(macdArg, result);
-    if (result.length >= macdArg.slowPeriod) {
+    if (result.length > macdArg.slowPeriod) {
       // using n last indicator values
-      const samples = result.slice(-(this.macdParams.confirmPeriods + 1));
+      const upSamples = result.slice(-(this.upConfirmations + 1));
       let testBuySignal = true;
-      let testSellSignal = true;
-      for (let i = 0; i < samples.length - 1; i++) {
-        if (samples[i + 1].histogram! < samples[i].histogram!)
+      for (let i = 0; i < upSamples.length - 1; i++) {
+        if (upSamples[i + 1].histogram! < upSamples[i].histogram!)
           testBuySignal = false; // if next sample not higher then don't buy
-        if (samples[i + 1].histogram! > samples[i].histogram!)
+      }
+      // using n last indicator values
+      const downSamples = result.slice(-(this.downConfirmations + 1));
+      let testSellSignal = true;
+      for (let i = 0; i < downSamples.length - 1; i++) {
+        if (downSamples[i + 1].histogram! > downSamples[i].histogram!)
           testSellSignal = false; // if next sample not higher then don't sell
       }
       gLogger.log(
         LogLevel.Trace,
         "MemeTrader.computeSignal",
         this.symbol,
-        samples,
         testBuySignal,
         testSellSignal,
       );
@@ -215,12 +226,7 @@ position: ${this.position}
       this.state == State.Idle
     ) {
       // Issue a buy signal
-      gLogger.log(
-        LogLevel.Warning,
-        "MemeTrader.handleSignal",
-        this.symbol,
-        "BUY",
-      );
+      gLogger.log(LogLevel.Info, "MemeTrader.handleSignal", this.symbol, "BUY");
       return this.api
         .placeMarketOrder(uuid(), "buy", this.symbol, {
           funds: this.tradeBudget,
@@ -228,7 +234,13 @@ position: ${this.position}
         .then((orderId) => {
           this.state = State.BUYING;
           this.lastSignal = signal;
-          this.orderId = orderId;
+          gLogger.log(
+            LogLevel.Info,
+            "MemeTrader.handleSignal",
+            this.symbol,
+            "BUY order placed with id",
+            orderId,
+          );
         });
     }
     if (
@@ -238,7 +250,7 @@ position: ${this.position}
     ) {
       // Issue a sell signal
       gLogger.log(
-        LogLevel.Warning,
+        LogLevel.Info,
         "MemeTrader.handleSignal",
         this.symbol,
         "SELL",
@@ -248,7 +260,13 @@ position: ${this.position}
         .then((orderId) => {
           this.state = State.SELLING;
           this.lastSignal = signal;
-          this.orderId = orderId;
+          gLogger.log(
+            LogLevel.Info,
+            "MemeTrader.handleSignal",
+            this.symbol,
+            "SELL order placed with id",
+            orderId,
+          );
         });
     }
     return Promise.resolve();
@@ -285,6 +303,7 @@ position: ${this.position}
         this.position = order.dealSize;
       }
     }
+    this.lastOrder = order;
   }
 
   public stop(): void {

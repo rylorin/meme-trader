@@ -1,0 +1,8 @@
+{
+  "gLogger": {
+    "console": "info"
+  },
+  "trader": {
+    "tradeBudget": 3
+  }
+}
