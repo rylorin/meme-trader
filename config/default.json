@@ -17,16 +17,18 @@
     "fastPeriod": 12,
     "slowPeriod": 26,
     "signalPeriod": 9,
-    "upConfirmations": 3,
-    "downConfirmations": 2,
+    "upConfirmations": 5,
+    "downConfirmations": 3,
     "tradeBudget": 1
   },
   "stats": {
     "maxAge": 15,
-    "minVolume": 0.1,
+    "minVolume": 0.2,
     "maxVolume": 0,
     "minPrice": 0.1,
-    "minChange": 0
+    "minChange": 0,
+    "ignore": ["ORDI-USDT"],
+    "force": []
   },
   "telegram": {
     "apiKey": "replace with your telegram bot api key"

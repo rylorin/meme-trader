@@ -20,14 +20,14 @@ services:
     configs:
       - source: meme-trader-local.json
         target: /root/config/local.json
-      - source: meme-trader.json_02
+      - source: meme-trader-production.json
         target: /root/config/production.json
 
 networks:
   default:
 
 configs:
-  meme-trader.json_02:
+  meme-trader-production.json:
     external: true
   meme-trader-local.json:
     external: true

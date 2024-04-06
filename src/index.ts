@@ -43,6 +43,9 @@ export class MyTradingBotApp {
   private readonly stats: Record<string, Stats> = {};
   private timer: NodeJS.Timeout | undefined;
 
+  private readonly ignore: string[];
+  private readonly force: string[];
+
   private statsLoaded = false;
   private readonly minVolume: number;
   private readonly maxVolume: number;
@@ -59,6 +62,8 @@ export class MyTradingBotApp {
     this.minPrice = parseFloat(this.config.get("stats.minPrice"));
     this.minChange = parseFloat(this.config.get("stats.minChange")) || 0.1;
     this.maxAge = parseInt(this.config.get("stats.maxAge")) || 60;
+    this.ignore = this.config.get("stats.ignore") || [];
+    this.force = this.config.get("stats.force") || [];
 
     // Create telegram bot to control application
     this.bot = new Telegraf(this.config.get("telegram.apiKey"));
@@ -92,6 +97,14 @@ export class MyTradingBotApp {
    */
   formatObject(obj: unknown): string {
     return `${JSON.stringify(obj, jsonReplacer, 2)}`;
+  }
+
+  filterIgnore(symbol: string): boolean {
+    return !this.ignore.includes(symbol);
+  }
+
+  filterForce(symbol: string): boolean {
+    return this.force.length ? this.force.includes(symbol) : true;
   }
 
   private async handleSymbolCommand(
@@ -218,7 +231,13 @@ export class MyTradingBotApp {
       .then((symbols: SymbolDesc[]) => {
         symbols = symbols
           // Only trade USDT pairs that are enabled for trading
-          .filter((item) => item.enableTrading && item.quoteCurrency == "USDT");
+          .filter(
+            (item) =>
+              item.enableTrading &&
+              item.quoteCurrency == "USDT" &&
+              this.filterIgnore(item.symbol) &&
+              this.filterForce(item.symbol),
+          );
         const universe_size = symbols.length;
         symbols = symbols
           // Filter out symbol with recent stats
@@ -254,7 +273,6 @@ export class MyTradingBotApp {
     gLogger.trace("MyTradingBotApp.createTraders", "run");
     // Wait for stats being available
     if (!this.statsLoaded) return Promise.resolve();
-    const _now = Date.now() / 1000;
     // return (
     Object.keys(this.stats)
       .map((key) => this.stats[key])
@@ -266,12 +284,22 @@ export class MyTradingBotApp {
       // Filter on volume
       .filter(
         (item) =>
-          item.volValue >= this.minVolume && item.volValue <= this.maxVolume,
+          (item.volValue >= this.minVolume &&
+            item.volValue <= this.maxVolume) ||
+          (this.force.length && this.filterForce(item.symbol)),
       )
       // Filter on price
-      .filter((item) => item.last >= this.minPrice)
+      .filter(
+        (item) =>
+          item.last >= this.minPrice ||
+          (this.force.length && this.filterForce(item.symbol)),
+      )
       // Only symbols that are up for some % in the last 24 hours
-      .filter((item) => item.changeRate >= this.minChange)
+      .filter(
+        (item) =>
+          item.changeRate >= this.minChange ||
+          (this.force.length && this.filterForce(item.symbol)),
+      )
       // Check each symbol
       .filter((item) => {
         if (!this.traders[item.symbol]) {
@@ -318,7 +346,6 @@ export class MyTradingBotApp {
       if (p.findIndex((item) => item.symbol == order.symbol) < 0) p.push(order);
       return p;
     }, [] as Order[]);
-    // console.log(orders);
     await orders
       .filter((order) => {
         // Only consider non active (completed) orders
@@ -350,6 +377,12 @@ export class MyTradingBotApp {
       );
 
     await this.runTraders();
+  }
+
+  public stop(): void {
+    if (this.timer) clearInterval(this.timer);
+    this.timer = undefined;
+    this.api.stop();
   }
 }
 

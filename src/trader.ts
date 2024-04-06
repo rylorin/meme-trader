@@ -3,6 +3,7 @@
   Implementing https://altfins.com/knowledge-base/macd-line-and-macd-signal-line/
 */
 import { macd } from "@rylorin/technicalindicators";
+import { MACDOutput } from "@rylorin/technicalindicators/declarations/moving_averages/MACD";
 import { IConfig } from "config";
 import { v4 as uuid } from "uuid";
 import { BarSize, KuCoinApi, Order } from "./kucoin-api";
@@ -81,6 +82,8 @@ export class MemeTrader {
 
   // For debugging
   private lastOrder: Order | undefined;
+  private lastPlots: Point[] | undefined;
+  private samples: MACDOutput[] | undefined;
 
   constructor(config: IConfig, api: KuCoinApi, symbol: string) {
     gLogger.log(
@@ -120,12 +123,14 @@ export class MemeTrader {
 symbol: ${this.symbol}
 tradeBudget: ${this.tradeBudget}
 isRunning: ${this.isRunning()}
+candles: ${this.candles.length} item(s)
+lastPlots: ${JSON.stringify(this.lastPlots)}
+lastSamples: ${JSON.stringify(this.samples)}
 upConfirmations: ${this.upConfirmations}
 downConfirmations: ${this.downConfirmations}
 lastSignal: ${this.lastSignal}
 state: ${this.state}
 position: ${this.position}
-candles: ${this.candles.length} item(s)
 order: ${JSON.stringify(this.lastOrder)}
 `;
   }
@@ -177,8 +182,9 @@ order: ${JSON.stringify(this.lastOrder)}
             (item) => item.time == candle.time,
           );
           if (idx < 0) {
+            // console.log("MemeTrader.updateCandles", candle);
             // Add non existing candle
-            this.candles!.push(candle);
+            this.candles.push(candle);
           }
         });
         return this.candles;
@@ -192,6 +198,8 @@ order: ${JSON.stringify(this.lastOrder)}
     };
     const result = macd(macdArg);
     if (result.length > macdArg.slowPeriod) {
+      this.lastPlots = candles.slice(-3);
+      this.samples = result.slice(-3);
       // using n last indicator values
       const upSamples = result.slice(-(this.upConfirmations + 1));
       let testBuySignal = true;

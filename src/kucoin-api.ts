@@ -149,6 +149,10 @@ export class KuCoinApi {
     );
   }
 
+  public stop(): void {
+    // Nothing to do for the moment
+  }
+
   public heartBeat(): void {
     this.api.rest.Others.getTimestamp().then(
       (getTimestampRl: { code: number; data: number }) => {
@@ -187,7 +191,7 @@ export class KuCoinApi {
       { startAt, endAt },
     )) as { code: number; msg: string; data: string[][] };
     if (result.code != 200000) throw Error(result.msg);
-    return result.data;
+    return result.data.reverse();
   }
 
   public async placeMarketOrder(
