@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   bot:
-    image: rylorin/memetrader:dev
+    image: rylorin/meme-trader:dev
     environment:
       KUCOINAPI_AUTH_KEY: ${KUCOINAPI_AUTH_KEY}
       KUCOINAPI_AUTH_SECRET: ${KUCOINAPI_AUTH_SECRET}
@@ -18,12 +18,16 @@ services:
           - node.role == manager
       replicas: 1
     configs:
-      - source: meme-trader.json
+      - source: meme-trader-local.json
+        target: /root/config/local.json
+      - source: meme-trader.json_02
         target: /root/config/production.json
 
 networks:
   default:
 
 configs:
-  meme-trader.json:
+  meme-trader.json_02:
+    external: true
+  meme-trader-local.json:
     external: true

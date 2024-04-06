@@ -17,12 +17,12 @@
     "fastPeriod": 12,
     "slowPeriod": 26,
     "signalPeriod": 9,
-    "upConfirmations": 4,
+    "upConfirmations": 3,
     "downConfirmations": 2,
     "tradeBudget": 1
   },
   "stats": {
-    "maxAge": 12,
+    "maxAge": 15,
     "minVolume": 0.1,
     "maxVolume": 0,
     "minPrice": 0.1,

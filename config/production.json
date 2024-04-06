@@ -3,6 +3,6 @@
     "console": "info"
   },
   "trader": {
-    "tradeBudget": 3
+    "tradeBudget": 10
   }
 }

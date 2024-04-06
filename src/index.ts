@@ -6,7 +6,7 @@ import { message } from "telegraf/filters";
 
 // Load env vars
 import dotenv from "dotenv";
-dotenv.config(); // eslint-disable-line @typescript-eslint/no-var-requires,@typescript-eslint/no-unsafe-call
+dotenv.config();
 
 // Load config
 import { default as config, IConfig } from "config";
