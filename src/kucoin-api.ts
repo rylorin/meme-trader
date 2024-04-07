@@ -102,6 +102,9 @@ export type Order = {
   tradeType: "TRADE";
 };
 
+/**
+ * KuCoin API wrapper
+ */
 export class KuCoinApi {
   protected config: IConfig;
   private readonly api: any;

@@ -3,6 +3,10 @@
     "console": "info"
   },
   "trader": {
-    "tradeBudget": 10
+    "tradeBudget": 5
+  },
+  "bot": {
+    "pause": false,
+    "drain": false
   }
 }

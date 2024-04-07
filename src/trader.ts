@@ -9,7 +9,7 @@ import { v4 as uuid } from "uuid";
 import { BarSize, KuCoinApi, Order } from "./kucoin-api";
 import { LogLevel, gLogger } from "./logger";
 
-type Point = {
+type OchlData = {
   time: number;
   open: number;
   close: number;
@@ -47,7 +47,7 @@ const timeframe2secs = (timeframe: string): number => {
   }
 };
 
-const kuCoin2point = (candle: string[]): Point => ({
+const kuCoin2point = (candle: string[]): OchlData => ({
   time: parseInt(candle[0]),
   open: parseFloat(candle[1]),
   close: parseFloat(candle[2]),
@@ -55,12 +55,16 @@ const kuCoin2point = (candle: string[]): Point => ({
   low: parseFloat(candle[4]),
 });
 
+/**
+ * Trade (monitor candles, detect signals, place orders) one symbol on KuCoin
+ */
 export class MemeTrader {
   private readonly config: IConfig;
   private readonly api: KuCoinApi;
 
   private timer: NodeJS.Timeout | undefined;
   private running: boolean;
+  private drainMode: boolean;
 
   private readonly symbol: string;
   private readonly timeframe: BarSize;
@@ -73,7 +77,7 @@ export class MemeTrader {
   };
   private readonly upConfirmations: number;
   private readonly downConfirmations: number;
-  private readonly candles: Point[];
+  private readonly candles: OchlData[];
 
   private lastSignal: Signal;
   private tradeBudget: number;
@@ -82,7 +86,7 @@ export class MemeTrader {
 
   // For debugging
   private lastOrder: Order | undefined;
-  private lastPlots: Point[] | undefined;
+  private lastPlots: OchlData[] | undefined;
   private samples: MACDOutput[] | undefined;
 
   constructor(config: IConfig, api: KuCoinApi, symbol: string) {
@@ -116,16 +120,19 @@ export class MemeTrader {
     this.position = 0;
     this.running = false;
     this.candles = [];
+    this.drainMode = false;
   }
 
   public toString(): string {
     return `
 symbol: ${this.symbol}
+drain: ${this.drainMode}
 tradeBudget: ${this.tradeBudget}
 isRunning: ${this.isRunning()}
 candles: ${this.candles.length} item(s)
-lastPlots: ${JSON.stringify(this.lastPlots)}
-lastSamples: ${JSON.stringify(this.samples)}
+${JSON.stringify(this.candles.slice(-3))}
+samples: ${this.samples?.length} item(s)
+${JSON.stringify(this.samples?.slice(-3))}
 upConfirmations: ${this.upConfirmations}
 downConfirmations: ${this.downConfirmations}
 lastSignal: ${this.lastSignal}
@@ -135,11 +142,23 @@ order: ${JSON.stringify(this.lastOrder)}
 `;
   }
 
+  setDrainMode(drainMode: boolean): void {
+    this.drainMode = drainMode;
+  }
+
   public isRunning(): boolean {
     return this.running;
   }
 
-  public start(): Promise<void> {
+  public getCandles(): OchlData[] {
+    return this.candles || [];
+  }
+
+  public getIndicator(): MACDOutput[] {
+    return this.samples || [];
+  }
+
+  public start(): void {
     gLogger.log(
       LogLevel.Info,
       "MemeTrader.start",
@@ -153,17 +172,12 @@ order: ${JSON.stringify(this.lastOrder)}
         this.symbol,
         "Trying to start an already running trader",
       );
-      return Promise.resolve();
+      return;
     }
     this.running = true;
-    return this.updateCandles()
-      .then(() => undefined)
-      .catch((err: Error) =>
-        gLogger.log(LogLevel.Error, "MemeTrader.start", this.symbol, err),
-      );
   }
 
-  private updateCandles(): Promise<Point[]> {
+  private updateCandles(): Promise<OchlData[]> {
     const now = Math.floor(Date.now() / 1000);
     return this.api
       .getMarketCandles(
@@ -182,7 +196,6 @@ order: ${JSON.stringify(this.lastOrder)}
             (item) => item.time == candle.time,
           );
           if (idx < 0) {
-            // console.log("MemeTrader.updateCandles", candle);
             // Add non existing candle
             this.candles.push(candle);
           }
@@ -191,24 +204,28 @@ order: ${JSON.stringify(this.lastOrder)}
       });
   }
 
-  private computeSignal(candles: Point[]): Signal {
+  /**
+   * Compute a signal from candles
+   * @param candles OCHL data
+   * @returns dectected signal if any
+   */
+  private computeSignal(candles: OchlData[]): Signal {
     const macdArg = {
       ...this.macdParams,
       values: candles.map((item) => item.close),
     };
-    const result = macd(macdArg);
-    if (result.length > macdArg.slowPeriod) {
-      this.lastPlots = candles.slice(-3);
-      this.samples = result.slice(-3);
+    this.samples = macd(macdArg);
+    if (this.samples.length > macdArg.slowPeriod) {
+      // console.log(this.symbol, "values", candles, "MACD", this.samples);
       // using n last indicator values
-      const upSamples = result.slice(-(this.upConfirmations + 1));
+      const upSamples = this.samples.slice(-(this.upConfirmations + 1));
       let testBuySignal = true;
       for (let i = 0; i < upSamples.length - 1; i++) {
         if (upSamples[i + 1].histogram! < upSamples[i].histogram!)
           testBuySignal = false; // if next sample not higher then don't buy
       }
       // using n last indicator values
-      const downSamples = result.slice(-(this.downConfirmations + 1));
+      const downSamples = this.samples.slice(-(this.downConfirmations + 1));
       let testSellSignal = true;
       for (let i = 0; i < downSamples.length - 1; i++) {
         if (downSamples[i + 1].histogram! > downSamples[i].histogram!)
@@ -231,9 +248,10 @@ order: ${JSON.stringify(this.lastOrder)}
     if (
       this.lastSignal != Signal.BUY &&
       signal == Signal.BUY &&
-      this.state == State.Idle
+      this.state == State.Idle &&
+      !this.drainMode
     ) {
-      // Issue a buy signal
+      // Handle a buy signal
       gLogger.log(LogLevel.Info, "MemeTrader.handleSignal", this.symbol, "BUY");
       return this.api
         .placeMarketOrder(uuid(), "buy", this.symbol, {
@@ -256,7 +274,7 @@ order: ${JSON.stringify(this.lastOrder)}
       signal == Signal.SELL &&
       this.state == State.POSITION
     ) {
-      // Issue a sell signal
+      // Handle a sell signal
       gLogger.log(
         LogLevel.Info,
         "MemeTrader.handleSignal",

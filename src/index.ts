@@ -1,8 +1,6 @@
 /*
   MyTradingBotApp
 */
-import { Context, Telegraf } from "telegraf";
-import { message } from "telegraf/filters";
 
 // Load env vars
 import dotenv from "dotenv";
@@ -11,30 +9,19 @@ dotenv.config();
 // Load config
 import { default as config, IConfig } from "config";
 
-// The following are relying on env var and config
+// The following can relying on env var and config
+import { Context, Telegraf } from "telegraf";
+import { message } from "telegraf/filters";
 import { Message, Update } from "telegraf/typings/core/types/typegram";
 import { CommandContextExtn } from "telegraf/typings/telegram-types";
 import { KuCoinApi, Order, Stats, SymbolDesc } from "./kucoin-api";
 import { gLogger, LogLevel } from "./logger";
 import { MemeTrader } from "./trader";
+import { formatObject, string2boolean } from "./utils";
 
 /**
- * @internal
- *
- * JSON replace function to convert ES6 Maps to tuple arrays.
+ * Trading bot implementation
  */
-function jsonReplacer(key: string, value: any): any {
-  if (value instanceof Map) {
-    const tuples: [unknown, unknown][] = [];
-    value.forEach((v, k) => {
-      tuples.push([k, v]);
-    });
-    return tuples;
-  } else {
-    return value;
-  }
-}
-
 export class MyTradingBotApp {
   private readonly config: IConfig;
   private readonly api: KuCoinApi;
@@ -42,6 +29,8 @@ export class MyTradingBotApp {
   private readonly traders: Record<string, MemeTrader> = {};
   private readonly stats: Record<string, Stats> = {};
   private timer: NodeJS.Timeout | undefined;
+  private drainMode: boolean;
+  private pauseMode: boolean;
 
   private readonly ignore: string[];
   private readonly force: string[];
@@ -64,6 +53,8 @@ export class MyTradingBotApp {
     this.maxAge = parseInt(this.config.get("stats.maxAge")) || 60;
     this.ignore = this.config.get("stats.ignore") || [];
     this.force = this.config.get("stats.force") || [];
+    this.drainMode = string2boolean(this.config.get("bot.drain"));
+    this.pauseMode = string2boolean(this.config.get("bot.pause"));
 
     // Create telegram bot to control application
     this.bot = new Telegraf(this.config.get("telegram.apiKey"));
@@ -74,6 +65,14 @@ export class MyTradingBotApp {
     this.bot.command("echo", (ctx) => ctx.reply(ctx.payload));
     this.bot.command("symbol", (ctx) => this.handleSymbolCommand(ctx));
     this.bot.command("trader", (ctx) => this.handleTraderCommand(ctx));
+    this.bot.command("pause", (ctx) => this.handlePauseCommand(ctx));
+    this.bot.command("drain", (ctx) => this.handleDrainCommand(ctx));
+    this.bot.command("candles", (ctx) => this.handleCandlesCommand(ctx));
+    this.bot.command("indicator", (ctx) => this.handleIndicatorCommand(ctx));
+    this.bot.hears(/\/(.+)/, (ctx) => {
+      const cmd = ctx.match[1];
+      return ctx.reply(`command not found: /${cmd}`);
+    });
   }
 
   public start(): Promise<void> {
@@ -90,13 +89,6 @@ export class MyTradingBotApp {
     ); // run checks every 1 min
 
     return this.bot.launch();
-  }
-
-  /**
-   * Print an object (JSON formatted) to console.
-   */
-  formatObject(obj: unknown): string {
-    return `${JSON.stringify(obj, jsonReplacer, 2)}`;
   }
 
   filterIgnore(symbol: string): boolean {
@@ -128,9 +120,7 @@ export class MyTradingBotApp {
         await keys.reduce(
           (p, key) =>
             p.then(() =>
-              ctx
-                .reply(this.formatObject(this.stats[key]))
-                .then(() => undefined),
+              ctx.reply(formatObject(this.stats[key])).then(() => undefined),
             ),
           Promise.resolve(),
         );
@@ -223,6 +213,121 @@ export class MyTradingBotApp {
     }
   }
 
+  private async handlePauseCommand(
+    ctx: Context<{
+      message: Update.New & Update.NonChannel & Message.TextMessage;
+      update_id: number;
+    }> &
+      Omit<Context<Update>, keyof Context<Update>> &
+      CommandContextExtn,
+  ): Promise<void> {
+    gLogger.debug(
+      "MyTradingBotApp.handlePauseCommand",
+      "Handle 'pause' command",
+    );
+    if (ctx.payload) {
+      const arg = ctx.payload.trim().replaceAll("  ", " ").toUpperCase();
+      this.pauseMode = string2boolean(arg);
+    }
+    await ctx
+      .reply(`Pause mode is ${this.pauseMode ? "on" : "off"}`)
+      .catch((err: Error) =>
+        gLogger.error("MyTradingBotApp.handleTrader", err.message),
+      );
+  }
+
+  private async handleDrainCommand(
+    ctx: Context<{
+      message: Update.New & Update.NonChannel & Message.TextMessage;
+      update_id: number;
+    }> &
+      Omit<Context<Update>, keyof Context<Update>> &
+      CommandContextExtn,
+  ): Promise<void> {
+    gLogger.debug(
+      "MyTradingBotApp.handleDrainCommand",
+      "Handle 'drain' command",
+    );
+    if (ctx.payload) {
+      const arg = ctx.payload.trim().replaceAll("  ", " ").toUpperCase();
+      this.drainMode = string2boolean(arg);
+      Object.keys(this.traders).forEach((symbol) =>
+        this.traders[symbol].setDrainMode(this.drainMode),
+      );
+    }
+    await ctx
+      .reply(`Drain mode is ${this.drainMode ? "on" : "off"}`)
+      .catch((err: Error) =>
+        gLogger.error("MyTradingBotApp.handleTrader", err.message),
+      );
+  }
+
+  private async handleCandlesCommand(
+    ctx: Context<{
+      message: Update.New & Update.NonChannel & Message.TextMessage;
+      update_id: number;
+    }> &
+      Omit<Context<Update>, keyof Context<Update>> &
+      CommandContextExtn,
+  ): Promise<void> {
+    gLogger.debug(
+      "MyTradingBotApp.handleCandlesCommand",
+      "Handle 'candles' command",
+    );
+    if (ctx.payload) {
+      const arg = ctx.payload.trim().replaceAll("  ", " ").toUpperCase();
+      const candles = this.traders[arg].getCandles();
+      await candles.reduce(
+        (p, item) =>
+          p.then(() =>
+            ctx
+              .reply(formatObject(item))
+              .then(() => undefined)
+              .catch((err: Error) =>
+                gLogger.error(
+                  "MyTradingBotApp.handleCandlesCommand",
+                  err.message,
+                ),
+              ),
+          ),
+        Promise.resolve(),
+      );
+    }
+  }
+
+  private async handleIndicatorCommand(
+    ctx: Context<{
+      message: Update.New & Update.NonChannel & Message.TextMessage;
+      update_id: number;
+    }> &
+      Omit<Context<Update>, keyof Context<Update>> &
+      CommandContextExtn,
+  ): Promise<void> {
+    gLogger.debug(
+      "MyTradingBotApp.handleIndicatorCommand",
+      "Handle 'candles' command",
+    );
+    if (ctx.payload) {
+      const arg = ctx.payload.trim().replaceAll("  ", " ").toUpperCase();
+      const indicator = this.traders[arg].getIndicator();
+      await indicator.reduce(
+        (p, item) =>
+          p.then(() =>
+            ctx
+              .reply(formatObject(item))
+              .then(() => undefined)
+              .catch((err: Error) =>
+                gLogger.error(
+                  "MyTradingBotApp.handleIndicatorCommand",
+                  err.message,
+                ),
+              ),
+          ),
+        Promise.resolve(),
+      );
+    }
+  }
+
   private updateStats(): Promise<void> {
     gLogger.trace("MyTradingBotApp.updateStats", "run");
     const now = Date.now();
@@ -273,7 +378,6 @@ export class MyTradingBotApp {
     gLogger.trace("MyTradingBotApp.createTraders", "run");
     // Wait for stats being available
     if (!this.statsLoaded) return Promise.resolve();
-    // return (
     Object.keys(this.stats)
       .map((key) => this.stats[key])
       // If trader not yet running
@@ -313,6 +417,7 @@ export class MyTradingBotApp {
             "MyTradingBotApp.createTraders",
             `${Object.keys(this.traders).length} trader(s)`,
           );
+          this.traders[item.symbol].setDrainMode(this.drainMode);
         }
         return !this.traders[item.symbol].isRunning();
       })
@@ -336,7 +441,11 @@ export class MyTradingBotApp {
   }
 
   private async check(): Promise<void> {
-    gLogger.trace("MyTradingBotApp.refreshTraders", "check");
+    gLogger.trace(
+      "MyTradingBotApp.refreshTraders",
+      this.pauseMode ? "paused" : "running",
+    );
+    if (this.pauseMode) return;
     await this.updateStats();
     await this.createTraders();
 
@@ -358,6 +467,7 @@ export class MyTradingBotApp {
               this.api,
               order.symbol,
             );
+            this.traders[order.symbol].setDrainMode(this.drainMode);
           }
           // Propagate info
           this.traders[order.symbol].setOrder(order!);

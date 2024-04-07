@@ -27,8 +27,12 @@
     "maxVolume": 0,
     "minPrice": 0.1,
     "minChange": 0,
-    "ignore": ["ORDI-USDT"],
+    "ignore": ["ORDI-USDT", "KCS-USDT"],
     "force": []
+  },
+  "bot": {
+    "pause": false,
+    "drain": "on"
   },
   "telegram": {
     "apiKey": "replace with your telegram bot api key"
