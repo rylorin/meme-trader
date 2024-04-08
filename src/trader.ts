@@ -12,9 +12,9 @@ import { LogLevel, gLogger } from "./logger";
 type OchlData = {
   time: number;
   open: number;
-  close: number;
   high: number;
   low: number;
+  close: number;
 };
 
 export const Signal = {
@@ -50,9 +50,9 @@ const timeframe2secs = (timeframe: string): number => {
 const kuCoin2point = (candle: string[]): OchlData => ({
   time: parseInt(candle[0]),
   open: parseFloat(candle[1]),
-  close: parseFloat(candle[2]),
   high: parseFloat(candle[3]),
   low: parseFloat(candle[4]),
+  close: parseFloat(candle[2]),
 });
 
 /**
@@ -83,6 +83,7 @@ export class MemeTrader {
   private tradeBudget: number;
   private state: State;
   private position: number;
+  private lastUpdate: number;
 
   // For debugging
   private lastOrder: Order | undefined;
@@ -121,18 +122,20 @@ export class MemeTrader {
     this.running = false;
     this.candles = [];
     this.drainMode = false;
+    this.lastUpdate = 0;
   }
 
   public toString(): string {
     return `
 symbol: ${this.symbol}
+timeframe: ${this.timeframe}
 drain: ${this.drainMode}
 tradeBudget: ${this.tradeBudget}
 isRunning: ${this.isRunning()}
 candles: ${this.candles.length} item(s)
-${JSON.stringify(this.candles.slice(-3))}
-samples: ${this.samples?.length} item(s)
-${JSON.stringify(this.samples?.slice(-3))}
+${JSON.stringify(this.candles.slice(-Math.max(this.upConfirmations, this.downConfirmations) - 1))}
+indicator: ${this.samples?.length} item(s)
+${JSON.stringify(this.samples?.slice(-Math.max(this.upConfirmations, this.downConfirmations) - 1))}
 upConfirmations: ${this.upConfirmations}
 downConfirmations: ${this.downConfirmations}
 lastSignal: ${this.lastSignal}
@@ -299,7 +302,15 @@ order: ${JSON.stringify(this.lastOrder)}
   }
 
   public check(): Promise<void> {
-    gLogger.log(LogLevel.Trace, "MemeTrader.check", this.symbol, "run");
+    const now = Date.now();
+    // Randomly run to reduce API load. Min delay 0.5 time frame, max 1.5
+    const run =
+      now >
+      this.lastUpdate +
+        (Math.random() + 0.5) * timeframe2secs(this.timeframe) * 1000;
+    gLogger.log(LogLevel.Trace, "MemeTrader.check", this.symbol, run);
+    if (!run) return Promise.resolve();
+    this.lastUpdate = now;
     return this.updateCandles()
       .then((candles) => this.computeSignal(candles))
       .then((signal) => this.handleSignal(signal))

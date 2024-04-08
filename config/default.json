@@ -13,11 +13,11 @@
     "authVersion": 2
   },
   "trader": {
-    "timeframe": "5min",
+    "timeframe": "15min",
     "fastPeriod": 12,
     "slowPeriod": 26,
     "signalPeriod": 9,
-    "upConfirmations": 5,
+    "upConfirmations": 3,
     "downConfirmations": 3,
     "tradeBudget": 1
   },
@@ -27,7 +27,7 @@
     "maxVolume": 0,
     "minPrice": 0.1,
     "minChange": 0,
-    "ignore": ["ORDI-USDT", "KCS-USDT"],
+    "ignore": ["KCS-USDT", "KALT-USDT", "ORDI-USDT", "WIF-USDT"],
     "force": []
   },
   "bot": {

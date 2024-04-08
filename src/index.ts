@@ -61,7 +61,9 @@ export class MyTradingBotApp {
     this.bot.start((ctx) => ctx.reply("Welcome"));
     this.bot.help((ctx) => ctx.reply("Send me a sticker"));
     this.bot.on(message("sticker"), (ctx) => ctx.reply("👍"));
-    this.bot.hears("Hi", (ctx) => ctx.reply("Hey there"));
+    this.bot.hears("Hi", (ctx) =>
+      ctx.reply(`Hey ${ctx.message.from.username}! 👋🏻`),
+    );
     this.bot.command("echo", (ctx) => ctx.reply(ctx.payload));
     this.bot.command("symbol", (ctx) => this.handleSymbolCommand(ctx));
     this.bot.command("trader", (ctx) => this.handleTraderCommand(ctx));
@@ -71,8 +73,13 @@ export class MyTradingBotApp {
     this.bot.command("indicator", (ctx) => this.handleIndicatorCommand(ctx));
     this.bot.hears(/\/(.+)/, (ctx) => {
       const cmd = ctx.match[1];
-      return ctx.reply(`command not found: /${cmd}`);
+      return ctx.reply(`command not found: '/${cmd}'. Type '/help' for help.`);
     });
+    this.bot.hears(/(.+)/, (ctx) =>
+      ctx.reply(
+        `Hello ${ctx.message.from.username}. What do you mean by '${ctx.text}'?`,
+      ),
+    );
   }
 
   public start(): Promise<void> {
@@ -281,7 +288,12 @@ export class MyTradingBotApp {
         (p, item) =>
           p.then(() =>
             ctx
-              .reply(formatObject(item))
+              .reply(
+                formatObject({
+                  datetime: new Date(item.time * 1000).toISOString(),
+                  ...item,
+                }),
+              )
               .then(() => undefined)
               .catch((err: Error) =>
                 gLogger.error(
@@ -292,6 +304,8 @@ export class MyTradingBotApp {
           ),
         Promise.resolve(),
       );
+    } else {
+      await ctx.reply("Symbol missing. Syntax: '/candles symbol'");
     }
   }
 
@@ -305,7 +319,7 @@ export class MyTradingBotApp {
   ): Promise<void> {
     gLogger.debug(
       "MyTradingBotApp.handleIndicatorCommand",
-      "Handle 'candles' command",
+      "Handle 'indicator' command",
     );
     if (ctx.payload) {
       const arg = ctx.payload.trim().replaceAll("  ", " ").toUpperCase();
@@ -325,6 +339,8 @@ export class MyTradingBotApp {
           ),
         Promise.resolve(),
       );
+    } else {
+      await ctx.reply("Symbol missing. Syntax: '/indicator symbol'");
     }
   }
 

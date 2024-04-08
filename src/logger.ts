@@ -49,7 +49,7 @@ export class Logger {
               return `${timestamp};${level};${service};${asset};${message}`;
             }),
           ),
-          maxsize: 2 * 1024 * 1024, // 2Mb
+          maxsize: 1 * 1024 * 1024, // 1Mb
           maxFiles: 3,
         }),
         new transports.Console({
