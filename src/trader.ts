@@ -161,6 +161,10 @@ order: ${JSON.stringify(this.lastOrder)}
     return this.samples || [];
   }
 
+  public getPosition(): number {
+    return this.position;
+  }
+
   public start(): void {
     gLogger.log(
       LogLevel.Info,

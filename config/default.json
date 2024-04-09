@@ -18,7 +18,7 @@
     "slowPeriod": 26,
     "signalPeriod": 9,
     "upConfirmations": 3,
-    "downConfirmations": 3,
+    "downConfirmations": 1,
     "tradeBudget": 1
   },
   "stats": {
@@ -27,7 +27,7 @@
     "maxVolume": 0,
     "minPrice": 0.1,
     "minChange": 0,
-    "ignore": ["KCS-USDT", "KALT-USDT", "ORDI-USDT", "WIF-USDT"],
+    "ignore": ["KCS-USDT", "KALT-USDT", "ORDI-USDT", "WIF-USDT", "AKT-USDT"],
     "force": []
   },
   "bot": {

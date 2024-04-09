@@ -61,23 +61,20 @@ export class MyTradingBotApp {
     this.bot.start((ctx) => ctx.reply("Welcome"));
     this.bot.help((ctx) => ctx.reply("Send me a sticker"));
     this.bot.on(message("sticker"), (ctx) => ctx.reply("👍"));
-    this.bot.hears("Hi", (ctx) =>
-      ctx.reply(`Hey ${ctx.message.from.username}! 👋🏻`),
-    );
-    this.bot.command("echo", (ctx) => ctx.reply(ctx.payload));
     this.bot.command("symbol", (ctx) => this.handleSymbolCommand(ctx));
     this.bot.command("trader", (ctx) => this.handleTraderCommand(ctx));
     this.bot.command("pause", (ctx) => this.handlePauseCommand(ctx));
     this.bot.command("drain", (ctx) => this.handleDrainCommand(ctx));
     this.bot.command("candles", (ctx) => this.handleCandlesCommand(ctx));
     this.bot.command("indicator", (ctx) => this.handleIndicatorCommand(ctx));
+    this.bot.command("position", (ctx) => this.handlePositionCommand(ctx));
     this.bot.hears(/\/(.+)/, (ctx) => {
       const cmd = ctx.match[1];
       return ctx.reply(`command not found: '/${cmd}'. Type '/help' for help.`);
     });
     this.bot.hears(/(.+)/, (ctx) =>
       ctx.reply(
-        `Hello ${ctx.message.from.username}. What do you mean by '${ctx.text}'?`,
+        `Hello ${ctx.message.from.username}. What do you mean by '${ctx.text}'? 🧐`,
       ),
     );
   }
@@ -106,6 +103,11 @@ export class MyTradingBotApp {
     return this.force.length ? this.force.includes(symbol) : true;
   }
 
+  private string2symbols(text: string): string[] {
+    const s = text.trim().replaceAll("  ", " ").toUpperCase();
+    return s.length ? s.split(" ") : [];
+  }
+
   private async handleSymbolCommand(
     ctx: Context<{
       message: Update.New & Update.NonChannel & Message.TextMessage;
@@ -118,11 +120,7 @@ export class MyTradingBotApp {
     gLogger.debug("MyTradingBotApp.handleSymbol", "Handle 'symbol' command");
     try {
       if (ctx.payload) {
-        keys = ctx.payload
-          .trim()
-          .replaceAll("  ", " ")
-          .toUpperCase()
-          .split(" ");
+        keys = this.string2symbols(ctx.payload);
         await ctx.reply(`${keys.length} symbol(s):`);
         await keys.reduce(
           (p, key) =>
@@ -175,11 +173,7 @@ export class MyTradingBotApp {
     gLogger.debug("MyTradingBotApp.handleTrader", "Handle 'trader' command");
     try {
       if (ctx.payload) {
-        keys = ctx.payload
-          .trim()
-          .replaceAll("  ", " ")
-          .toUpperCase()
-          .split(" ");
+        keys = this.string2symbols(ctx.payload);
         await ctx.reply(`${keys.length} symbol(s):`);
         await keys.reduce(
           (p, key) =>
@@ -282,7 +276,7 @@ export class MyTradingBotApp {
       "Handle 'candles' command",
     );
     if (ctx.payload) {
-      const arg = ctx.payload.trim().replaceAll("  ", " ").toUpperCase();
+      const arg = this.string2symbols(ctx.payload)[0];
       const candles = this.traders[arg].getCandles();
       await candles.reduce(
         (p, item) =>
@@ -322,7 +316,7 @@ export class MyTradingBotApp {
       "Handle 'indicator' command",
     );
     if (ctx.payload) {
-      const arg = ctx.payload.trim().replaceAll("  ", " ").toUpperCase();
+      const arg = this.string2symbols(ctx.payload)[0];
       const indicator = this.traders[arg].getIndicator();
       await indicator.reduce(
         (p, item) =>
@@ -341,6 +335,47 @@ export class MyTradingBotApp {
       );
     } else {
       await ctx.reply("Symbol missing. Syntax: '/indicator symbol'");
+    }
+  }
+
+  private async handlePositionCommand(
+    ctx: Context<{
+      message: Update.New & Update.NonChannel & Message.TextMessage;
+      update_id: number;
+    }> &
+      Omit<Context<Update>, keyof Context<Update>> &
+      CommandContextExtn,
+  ): Promise<void> {
+    gLogger.debug(
+      "MyTradingBotApp.handlePositionCommand",
+      "Handle 'position' command",
+    );
+    let arg = this.string2symbols(ctx.payload);
+    if (!arg.length) arg = Object.keys(this.traders);
+    if (arg.length) {
+      await arg
+        .sort((a, b) => a.localeCompare(b))
+        .reduce(
+          (p, symbol) =>
+            p.then(() =>
+              ctx
+                .reply(`${symbol}: ${this.traders[symbol]?.getPosition()}`)
+                .then(() => undefined)
+                .catch((error: Error) => {
+                  gLogger.error(
+                    "MyTradingBotApp.handlePositionCommand",
+                    error.message,
+                  );
+                }),
+            ),
+          Promise.resolve(),
+        );
+    } else {
+      await ctx
+        .reply("none")
+        .catch((err: Error) =>
+          gLogger.error("MyTradingBotApp.handleTrader", err.message),
+        );
     }
   }
 
