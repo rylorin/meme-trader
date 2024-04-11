@@ -350,11 +350,13 @@ export class MyTradingBotApp {
       "MyTradingBotApp.handlePositionCommand",
       "Handle 'position' command",
     );
-    let arg = this.string2symbols(ctx.payload);
-    if (!arg.length) arg = Object.keys(this.traders);
-    if (arg.length) {
-      await arg
+    let keys = this.string2symbols(ctx.payload);
+    if (!keys.length) keys = Object.keys(this.traders);
+    if (keys.length) {
+      await ctx.reply(`${keys.length} symbol(s):`);
+      await keys
         .sort((a, b) => a.localeCompare(b))
+        .filter((symbol) => this.traders[symbol]?.getPosition())
         .reduce(
           (p, symbol) =>
             p.then(() =>

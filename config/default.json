@@ -17,17 +17,27 @@
     "fastPeriod": 12,
     "slowPeriod": 26,
     "signalPeriod": 9,
-    "upConfirmations": 3,
+    "upConfirmations": 1,
     "downConfirmations": 1,
     "tradeBudget": 1
   },
   "stats": {
     "maxAge": 15,
-    "minVolume": 0.2,
+    "minVolume": 0.5,
     "maxVolume": 0,
     "minPrice": 0.1,
     "minChange": 0,
-    "ignore": ["KCS-USDT", "KALT-USDT", "ORDI-USDT", "WIF-USDT", "AKT-USDT"],
+    "ignore": [
+      "KCS-USDT",
+      "KALT-USDT",
+      "ORDI-USDT",
+      "WIF-USDT",
+      "AKT-USDT",
+      "TAO-USDT",
+      "TRUF-USDT",
+      "TAO-USDT",
+      "DECHAT-USDT"
+    ],
     "force": []
   },
   "bot": {
