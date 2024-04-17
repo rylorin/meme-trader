@@ -524,10 +524,13 @@ export class MyTradingBotApp {
 
     let orders = (await this.api.getOrdersList()).items;
     // Extract last order for each symbol
-    orders = orders.reduce((p: Order[], order: Order): Order[] => {
-      if (p.findIndex((item) => item.symbol == order.symbol) < 0) p.push(order);
-      return p;
-    }, [] as Order[]);
+    orders = orders
+      .reduce((p: Order[], order: Order): Order[] => {
+        if (p.findIndex((item) => item.symbol == order.symbol) < 0)
+          p.push(order);
+        return p;
+      }, [] as Order[])
+      .filter((order) => this.filterIgnore(order.symbol));
     await orders
       .filter((order) => {
         // Only consider non active (completed) orders
