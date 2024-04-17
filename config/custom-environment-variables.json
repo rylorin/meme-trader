@@ -7,6 +7,7 @@
     }
   },
   "telegram": {
-    "apiKey": "TELEGRAM_API_KEY"
+    "apiKey": "TELEGRAM_API_KEY",
+    "console": "TELEGRAM_CHAT_ID"
   }
 }

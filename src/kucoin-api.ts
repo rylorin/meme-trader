@@ -131,25 +131,25 @@ export class KuCoinApi {
 
   public start(): void {
     gLogger.debug("KuCoinApi.start", "start API");
-    this.datafeed.connectSocket(); // should await
-    /* const callbackId1 = */ this.datafeed.subscribe(
-      "/market/candles:BTC-USDT_1hour",
-      (_message: any) => {
-        // console.log("BTC-USDT_1hour", message);
-      },
-    );
-    /*  const callbackId2 = */ this.datafeed.subscribe(
-      "/spotMarket/tradeOrdersV2",
-      (message: any) => {
-        console.log("tradeOrdersV2", message);
-      },
-    );
-    /*  const callbackId3 = */ this.datafeed.subscribe(
-      "/spotMarket/tradeOrders",
-      (message: any) => {
-        console.log("tradeOrdersV2", message);
-      },
-    );
+    // this.datafeed.connectSocket(); // should await
+    // /* const callbackId1 = */ this.datafeed.subscribe(
+    //   "/market/candles:BTC-USDT_1hour",
+    //   (_message: any) => {
+    //     // console.log("BTC-USDT_1hour", message);
+    //   },
+    // );
+    // /*  const callbackId2 = */ this.datafeed.subscribe(
+    //   "/spotMarket/tradeOrdersV2",
+    //   (message: any) => {
+    //     console.log("tradeOrdersV2", message);
+    //   },
+    // );
+    // /*  const callbackId3 = */ this.datafeed.subscribe(
+    //   "/spotMarket/tradeOrders",
+    //   (message: any) => {
+    //     console.log("tradeOrdersV2", message);
+    //   },
+    // );
   }
 
   public stop(): void {

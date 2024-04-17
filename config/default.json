@@ -1,14 +1,15 @@
 {
   "gLogger": {
     "console": "debug",
-    "default": "silly"
+    "default": "silly",
+    "telegram": "info"
   },
   "kucoin-api": {
     "baseUrl": "https://openapi-v2.kucoin.com",
     "apiAuth": {
-      "key": "",
-      "secret": "",
-      "passphrase": ""
+      "key": "replace with your KuCoin API key",
+      "secret": "replace with your KuCoin API secret",
+      "passphrase": "replace with your KuCoin API passphrase"
     },
     "authVersion": 2
   },
@@ -23,10 +24,10 @@
   },
   "stats": {
     "maxAge": 15,
-    "minVolume": 0.5,
+    "minVolume": 1,
     "maxVolume": 0,
-    "minPrice": 0.1,
-    "minChange": 0,
+    "minPrice": 0.01,
+    "minChange": 0.1,
     "ignore": [
       "KCS-USDT",
       "KALT-USDT",
@@ -36,7 +37,14 @@
       "TAO-USDT",
       "TRUF-USDT",
       "TAO-USDT",
-      "DECHAT-USDT"
+      "DECHAT-USDT",
+      "BEFI-USDT",
+      "INSP-USDT",
+      "JTO-USDT",
+      "MASA-USDT",
+      "AGIX-USDT",
+      "FOXY-USDT",
+      "ONDO-USDT"
     ],
     "force": []
   },
@@ -45,6 +53,7 @@
     "drain": "on"
   },
   "telegram": {
-    "apiKey": "replace with your telegram bot api key"
+    "apiKey": "replace with your telegram bot api key",
+    "console": false
   }
 }

@@ -1,5 +1,6 @@
-import { default as config } from "config";
+import { IConfig, default as config } from "config";
 import stringify from "json-stringify-safe";
+import { Telegraf, Telegram } from "telegraf";
 import {
   Logger as WinstonLogger,
   createLogger,
@@ -7,6 +8,7 @@ import {
   transports,
   default as winston,
 } from "winston";
+import Transport from "winston-transport";
 
 export const LogLevel = {
   Fatal: 0,
@@ -23,25 +25,72 @@ export type LogLevel = (typeof LogLevel)[keyof typeof LogLevel];
 // const brightRed = [91, 39];
 // const brightYellow = [93, 39];
 // const brightBlue = [94, 39];
+//
+
+// Inherit from `winston-transport` so you can take advantage
+// of the base functionality and `.exceptions.handle()`.
+//
+class CustomTransport extends Transport {
+  private readonly telegram: Telegram;
+  private readonly chatId: number | undefined;
+
+  constructor(config: IConfig, opts?: Record<string, any>) {
+    super(opts);
+
+    //
+    // Consume any custom options here. e.g.:
+    // - Connection information for databases
+    // - Authentication information for APIs (e.g. loggly, papertrail,
+    //   logentries, etc.).
+    //
+    this.telegram = new Telegram(config.get("telegram.apiKey"));
+    if (config.has("telegram.console"))
+      this.chatId = config.get("telegram.console");
+  }
+
+  log(info: any, callback: () => void): void {
+    // Perform the writing to the remote service
+    // console.log("custom logger", this.chatId, info[Symbol.for("message")]);
+    if (this.chatId) {
+      this.telegram
+        .sendMessage(this.chatId, info[Symbol.for("message")] as string)
+        .then(() => callback())
+        .catch((error: Error) => console.error(error));
+    } else {
+      callback();
+    }
+  }
+}
 
 /**
  * Logger facility class
  */
 export class Logger {
-  private loggers: Record<string, WinstonLogger> = {};
+  private readonly config: IConfig;
+  private readonly telegram: Telegraf;
+  private loggers: WinstonLogger;
 
-  constructor() {
+  constructor(config: IConfig) {
+    this.config = config;
     // create default logger
-    this.loggers["default"] = this.createLogger("default");
+    this.loggers = this.createLogger(this.config);
+    this.telegram = new Telegraf(this.config.get("telegram.apiKey"));
   }
 
-  private createLogger(module: string): winston.Logger {
+  private createLogger(config: IConfig): winston.Logger {
     return createLogger({
       transports: [
+        new CustomTransport(config, {
+          level: this.config.get("gLogger.telegram"),
+          format: format.printf(({ level, message, asset }) => {
+            const asset_text = asset ? ` (${asset})` : "";
+            return `[${level}]${asset_text} ${message}`;
+          }),
+        }),
         new transports.File({
           dirname: "./logs",
-          filename: module + ".csv",
-          level: config.get("gLogger." + module),
+          filename: "default.csv",
+          level: this.config.get("gLogger.default"),
           tailable: true,
           format: format.combine(
             format.timestamp(),
@@ -53,7 +102,7 @@ export class Logger {
           maxFiles: 3,
         }),
         new transports.Console({
-          level: config.get("gLogger.console"),
+          level: this.config.get("gLogger.console"),
           format: format.combine(
             format.colorize(),
             format.timestamp(),
@@ -145,7 +194,7 @@ export class Logger {
         else return stringify(value);
       })
       .join(", ");
-    this.loggers["default"].log({
+    this.loggers.log({
       level: Logger.level2string(level),
       message,
       service: module,
@@ -201,4 +250,4 @@ export class Logger {
 }
 
 /** singleton instance of Logger */
-export const gLogger = new Logger();
+export const gLogger = new Logger(config);

@@ -3,7 +3,7 @@
     "console": "info"
   },
   "trader": {
-    "tradeBudget": 2
+    "tradeBudget": 2.5
   },
   "bot": {
     "pause": false,

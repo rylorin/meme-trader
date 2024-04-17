@@ -25,7 +25,7 @@ import { formatObject, string2boolean } from "./utils";
 export class MyTradingBotApp {
   private readonly config: IConfig;
   private readonly api: KuCoinApi;
-  private readonly bot: Telegraf;
+  private readonly telegram: Telegraf;
   private readonly traders: Record<string, MemeTrader> = {};
   private readonly stats: Record<string, Stats> = {};
   private timer: NodeJS.Timeout | undefined;
@@ -57,22 +57,29 @@ export class MyTradingBotApp {
     this.pauseMode = string2boolean(this.config.get("bot.pause"));
 
     // Create telegram bot to control application
-    this.bot = new Telegraf(this.config.get("telegram.apiKey"));
-    this.bot.start((ctx) => ctx.reply("Welcome"));
-    this.bot.help((ctx) => ctx.reply("Send me a sticker"));
-    this.bot.on(message("sticker"), (ctx) => ctx.reply("👍"));
-    this.bot.command("symbol", (ctx) => this.handleSymbolCommand(ctx));
-    this.bot.command("trader", (ctx) => this.handleTraderCommand(ctx));
-    this.bot.command("pause", (ctx) => this.handlePauseCommand(ctx));
-    this.bot.command("drain", (ctx) => this.handleDrainCommand(ctx));
-    this.bot.command("candles", (ctx) => this.handleCandlesCommand(ctx));
-    this.bot.command("indicator", (ctx) => this.handleIndicatorCommand(ctx));
-    this.bot.command("position", (ctx) => this.handlePositionCommand(ctx));
-    this.bot.hears(/\/(.+)/, (ctx) => {
+    this.telegram = new Telegraf(this.config.get("telegram.apiKey"));
+    this.telegram.start((ctx) => ctx.reply("Welcome"));
+    this.telegram.help((ctx) => ctx.reply("Send me a sticker"));
+    this.telegram.on(message("sticker"), (ctx) => ctx.reply("👍"));
+    this.telegram.command("symbol", (ctx) => this.handleSymbolCommand(ctx));
+    this.telegram.command("trader", (ctx) => this.handleTraderCommand(ctx));
+    this.telegram.command("pause", (ctx) => this.handlePauseCommand(ctx));
+    this.telegram.command("drain", (ctx) => this.handleDrainCommand(ctx));
+    this.telegram.command("candles", (ctx) => this.handleCandlesCommand(ctx));
+    this.telegram.command("indicator", (ctx) =>
+      this.handleIndicatorCommand(ctx),
+    );
+    this.telegram.command("position", (ctx) => this.handlePositionCommand(ctx));
+    this.telegram.command("exit", (ctx) => this.handleExitCommand(ctx));
+    // this.telegram.command("stop", () => this.exit());
+    this.telegram.command("whoami", (ctx) =>
+      ctx.reply(JSON.stringify(ctx.update)),
+    );
+    this.telegram.hears(/\/(.+)/, (ctx) => {
       const cmd = ctx.match[1];
       return ctx.reply(`command not found: '/${cmd}'. Type '/help' for help.`);
     });
-    this.bot.hears(/(.+)/, (ctx) =>
+    this.telegram.hears(/(.+)/, (ctx) =>
       ctx.reply(
         `Hello ${ctx.message.from.username}. What do you mean by '${ctx.text}'? 🧐`,
       ),
@@ -89,10 +96,10 @@ export class MyTradingBotApp {
           gLogger.error("MyTradingBotApp.check", err.message);
         });
       },
-      1 * 60 * 1000,
-    ); // run checks every 1 min
+      1 * 60 * 1000, // run checks every 1 min
+    );
 
-    return this.bot.launch();
+    return this.telegram.launch().then(() => console.log("telegram started"));
   }
 
   filterIgnore(symbol: string): boolean {
@@ -352,26 +359,26 @@ export class MyTradingBotApp {
     );
     let keys = this.string2symbols(ctx.payload);
     if (!keys.length) keys = Object.keys(this.traders);
+    keys = keys
+      .sort((a, b) => a.localeCompare(b))
+      .filter((symbol) => this.traders[symbol]?.getPosition());
     if (keys.length) {
       await ctx.reply(`${keys.length} symbol(s):`);
-      await keys
-        .sort((a, b) => a.localeCompare(b))
-        .filter((symbol) => this.traders[symbol]?.getPosition())
-        .reduce(
-          (p, symbol) =>
-            p.then(() =>
-              ctx
-                .reply(`${symbol}: ${this.traders[symbol]?.getPosition()}`)
-                .then(() => undefined)
-                .catch((error: Error) => {
-                  gLogger.error(
-                    "MyTradingBotApp.handlePositionCommand",
-                    error.message,
-                  );
-                }),
-            ),
-          Promise.resolve(),
-        );
+      await keys.reduce(
+        (p, symbol) =>
+          p.then(() =>
+            ctx
+              .reply(`${symbol}: ${this.traders[symbol]?.getPosition()}`)
+              .then(() => undefined)
+              .catch((error: Error) => {
+                gLogger.error(
+                  "MyTradingBotApp.handlePositionCommand",
+                  error.message,
+                );
+              }),
+          ),
+        Promise.resolve(),
+      );
     } else {
       await ctx
         .reply("none")
@@ -379,6 +386,19 @@ export class MyTradingBotApp {
           gLogger.error("MyTradingBotApp.handleTrader", err.message),
         );
     }
+  }
+
+  private async handleExitCommand(
+    ctx: Context<{
+      message: Update.New & Update.NonChannel & Message.TextMessage;
+      update_id: number;
+    }> &
+      Omit<Context<Update>, keyof Context<Update>> &
+      CommandContextExtn,
+  ): Promise<void> {
+    gLogger.debug("MyTradingBotApp.handleExitCommand", "Handle 'exit' command");
+    await ctx.reply(`bye ${ctx.message.from.username}!`);
+    setTimeout(() => this.exit(), 1_000);
   }
 
   private updateStats(): Promise<void> {
@@ -466,7 +486,7 @@ export class MyTradingBotApp {
             this.api,
             item.symbol,
           );
-          gLogger.info(
+          gLogger.debug(
             "MyTradingBotApp.createTraders",
             `${Object.keys(this.traders).length} trader(s)`,
           );
@@ -547,10 +567,19 @@ export class MyTradingBotApp {
     this.timer = undefined;
     this.api.stop();
   }
+
+  public exit(signal?: string): void {
+    this.stop();
+    this.telegram.stop(signal);
+    process.exit();
+  }
 }
 
 gLogger.info("main", `NODE_ENV=${process.env["NODE_ENV"]}`);
-const app = new MyTradingBotApp(config);
-app
+const bot = new MyTradingBotApp(config);
+// Enable graceful stop
+process.once("SIGINT", () => bot.exit("SIGINT"));
+process.once("SIGTERM", () => bot.exit("SIGTERM"));
+bot
   .start()
   .catch((err: Error) => gLogger.log(LogLevel.Fatal, "main", undefined, err));

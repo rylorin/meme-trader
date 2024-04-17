@@ -14,7 +14,7 @@
     "prepublishOnly": "yarn build",
     "qc": "yarn lint && yarn type-check && prettier --check .",
     "start": "NODE_ENV=production node build/index.js",
-    "start:dev": "NODE_ENV=development ts-node-dev --project tsconfig.json src/index",
+    "start:dev": "ts-node-dev --project tsconfig.json src/index",
     "test": "yarn qc",
     "type-check": "tsc --noEmit"
   },
