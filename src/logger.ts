@@ -50,7 +50,6 @@ class CustomTransport extends Transport {
 
   log(info: any, callback: () => void): void {
     // Perform the writing to the remote service
-    // console.log("custom logger", this.chatId, info[Symbol.for("message")]);
     if (this.chatId) {
       this.telegram
         .sendMessage(this.chatId, info[Symbol.for("message")] as string)

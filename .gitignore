@@ -129,7 +129,7 @@ dist
 .yarn/install-state.gz
 .pnp.*
 
-# Repository specific settings
+# Repository (local) specific settings
 build/
 config/local*
 docker-env-file
